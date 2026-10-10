@@ -1,0 +1,22 @@
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+/vendor/
+
+# Tools and reports
+/.cache/
+/coverage.html
+/coverage.xml
+/report.xml
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env

@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  gateway:
+    image: nginx:1.25-alpine
+    container_name: homestock-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-80}:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+    networks:
+      - homestock-network
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: homestock-auth-service
+    restart: unless-stopped
+    environment:
+      - PORT=${AUTH_SERVICE_PORT:-8080}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-homestock}
+      - DB_PASSWORD=${DB_PASSWORD:-homestock_secret}
+      - DB_NAME=${AUTH_DB_NAME:-homestock_auth}
+      - JWT_SECRET=${JWT_SECRET}
+      - ACCESS_TOKEN_TTL_MINUTES=${ACCESS_TOKEN_TTL_MINUTES:-15}
+      - REFRESH_TOKEN_TTL_DAYS=${REFRESH_TOKEN_TTL_DAYS:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-migrations:
+        condition: service_completed_successfully
+    networks:
+      - homestock-network
+
+  auth-migrations:
+    image: kukymbr/goose-docker
+    container_name: homestock-auth-migrations
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=${DB_PORT:-5432} user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${AUTH_DB_NAME:-homestock_auth} sslmode=disable
+    volumes:
+      - ./auth-service/migrations:/migrations
+    command: up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - homestock-network
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: homestock-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-homestock}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-homestock_secret}
+      POSTGRES_DB: ${DB_DEFAULT_NAME:-homestock}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-homestock}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestock-network
+
+  rabbitmq:
+    image: rabbitmq:4.3-management-alpine
+    container_name: homestock-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-homestock}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-homestock_rabbit_secret}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestock-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  homestock-network:
+    driver: bridge
