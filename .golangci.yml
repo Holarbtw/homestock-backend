@@ -1,0 +1,36 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck      
+    - gosimple      
+    - govet         
+    - ineffassign   
+    - staticcheck   
+    - unused        
+
+    - bodyclose     
+    - noctx         
+    - nilerr        
+    - errorlint     
+
+    - gosec         
+    - misspell      
+    - gocritic      
+    - unconvert     
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+  gosec:
+    excludes:
+      - G404
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
