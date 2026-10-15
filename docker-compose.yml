@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   gateway:
     image: nginx:1.25-alpine
@@ -16,14 +14,14 @@ services:
 
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: auth-service/Dockerfile
     container_name: homestock-auth-service
     restart: unless-stopped
     environment:
       - PORT=${AUTH_SERVICE_PORT:-8080}
       - DB_HOST=${DB_HOST:-postgres}
-      - DB_PORT=${DB_PORT:-5432}
+      - DB_PORT=5432
       - DB_USER=${DB_USER:-homestock}
       - DB_PASSWORD=${DB_PASSWORD:-homestock_secret}
       - DB_NAME=${AUTH_DB_NAME:-homestock_auth}
@@ -43,7 +41,7 @@ services:
     container_name: homestock-auth-migrations
     environment:
       - GOOSE_DRIVER=postgres
-      - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=${DB_PORT:-5432} user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${AUTH_DB_NAME:-homestock_auth} sslmode=disable
+      - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${AUTH_DB_NAME:-homestock_auth} sslmode=disable
     volumes:
       - ./auth-service/migrations:/migrations
     command: up
@@ -62,9 +60,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-homestock_secret}
       POSTGRES_DB: ${DB_DEFAULT_NAME:-homestock}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-homestock}"]

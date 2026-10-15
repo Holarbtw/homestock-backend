@@ -2,12 +2,13 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.work ./
+COPY pkg ./pkg
+COPY auth-service ./auth-service
+
+WORKDIR /app/auth-service
+
 RUN go mod download
-
-COPY . .
-
 RUN CGO_ENABLED=0 GOOS=linux go build -o /auth-service ./cmd/main.go
 
 FROM alpine:3.23
