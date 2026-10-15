@@ -60,14 +60,14 @@ func (v *TokenVerifier) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			apperrors.RespondWithError(w, apperrors.ErrUnauthorized)
+			apperrors.RespondWithError(w, req, apperrors.ErrUnauthorized)
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := v.ParseToken(tokenString)
 		if err != nil {
-			apperrors.RespondWithError(w, apperrors.ErrInvalidToken)
+			apperrors.RespondWithError(w, req, apperrors.ErrInvalidToken)
 			return
 		}
 

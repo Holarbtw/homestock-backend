@@ -1,11 +1,16 @@
 package apperrors
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 )
+
+type errorContextKey struct{}
+
+var errCtxKey = errorContextKey{}
 
 type CustomError struct {
 	Code       string `json:"code"`
@@ -45,7 +50,9 @@ var (
 	ErrValidationFailed = &CustomError{Code: "VALIDATION_FAILED", StatusCode: http.StatusBadRequest, Msg: "Validation failed"}
 )
 
-func RespondWithError(w http.ResponseWriter, err error) {
+func RespondWithError(w http.ResponseWriter, r *http.Request, err error) {
+	*r = *r.WithContext(context.WithValue(r.Context(), errCtxKey, err))
+
 	w.Header().Set("Content-Type", "application/json")
 
 	var customErr *CustomError
@@ -57,4 +64,11 @@ func RespondWithError(w http.ResponseWriter, err error) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 	_ = json.NewEncoder(w).Encode(ErrInternalServer)
+}
+
+func GetErrorFromContext(ctx context.Context) error {
+	if err, ok := ctx.Value(errCtxKey).(error); ok {
+		return err
+	}
+	return nil
 }
