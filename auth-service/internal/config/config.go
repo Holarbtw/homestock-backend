@@ -12,6 +12,7 @@ type Config struct {
 	Port string `env:"AUTH_SERVICE_PORT" env-default:"8080"`
 	DB   DBConfig
 	JWT  JWTConfig
+	Security SecurityConfig
 }
 
 type DBConfig struct {
@@ -26,6 +27,10 @@ type JWTConfig struct {
 	Secret          string        `env:"JWT_SECRET" env-required:"true"`
 	AccessTokenTTL  time.Duration `env:"ACCESS_TOKEN_TTL_MINUTES" env-default:"15m"`
 	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL_DAYS" env-default:"720h"`
+}
+
+type SecurityConfig struct {
+    BcryptCost int `env:"BCRYPT_COST" env-default:"10"`
 }
 
 func (c *DBConfig) DSN() string {

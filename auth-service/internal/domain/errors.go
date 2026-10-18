@@ -36,4 +36,22 @@ var (
 		StatusCode: http.StatusBadRequest,
 		Msg:        "Invalid timezone format, expected IANA format (e.g. Europe/Moscow)",
 	}
+
+	ErrInvalidEmail = &apperrors.CustomError{
+		Code:       "INVALID_EMAIL",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Invalid email address format",
+	}
+
+	ErrInvalidPassword = &apperrors.CustomError{
+		Code:       "INVALID_PASSWORD",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Password must be between 8 and 72 characters",
+	}
+
+	ErrInvalidNickname = &apperrors.CustomError{
+		Code:       "INVALID_NICKNAME",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Nickname must be between 2 and 50 characters",
+	}
 )
