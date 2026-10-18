@@ -13,6 +13,7 @@ func toDomainUser(u *userDB) *domain.User {
 		Email:        u.Email,
 		PasswordHash: u.PasswordHash,
 		Nickname:     u.Nickname,
+		Timezone:     u.Timezone,
 		IsGuest:      u.IsGuest,
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,

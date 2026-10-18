@@ -29,14 +29,14 @@ func (r *UserRepository) getExecutor(ctx context.Context) pkgPostgres.QueryExecu
 	return pkgPostgres.GetExecutor(ctx, r.pool)
 }
 
-func (r *UserRepository) Create(ctx context.Context, email, passwordHash, nickname string) (*domain.User, error) {
+func (r *UserRepository) Create(ctx context.Context, email, passwordHash, nickname, timezone string) (*domain.User, error) {
 	query := `
-		insert into users (email, password_hash, nickname, is_guest)
-		values ($1, $2, $3, false)
-		returning id, email, password_hash, nickname, is_guest, created_at, updated_at, deleted_at
+		insert into users (email, password_hash, nickname, timezone, is_guest)
+		values ($1, $2, $3, $4, false)
+		returning id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
 	`
 
-	rows, err := r.getExecutor(ctx).Query(ctx, query, email, passwordHash, nickname)
+	rows, err := r.getExecutor(ctx).Query(ctx, query, email, passwordHash, nickname, timezone)
 	if err != nil {
 		return nil, apperrors.MapPgError(err, authConstraintMap)
 	}
@@ -49,14 +49,14 @@ func (r *UserRepository) Create(ctx context.Context, email, passwordHash, nickna
 	return toDomainUser(&record), nil
 }
 
-func (r *UserRepository) CreateGuest(ctx context.Context, nickname string) (*domain.User, error) {
+func (r *UserRepository) CreateGuest(ctx context.Context, nickname, timezone string) (*domain.User, error) {
 	query := `
-		insert into users (email, password_hash, nickname, is_guest)
-		values (null, null, $1, true)
-		returning id, email, password_hash, nickname, is_guest, created_at, updated_at, deleted_at
+		insert into users (email, password_hash, nickname, timezone, is_guest)
+		values (null, null, $1, $2, true)
+		returning id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
 	`
 
-	rows, err := r.getExecutor(ctx).Query(ctx, query, nickname)
+	rows, err := r.getExecutor(ctx).Query(ctx, query, nickname, timezone)
 	if err != nil {
 		return nil, apperrors.MapPgError(err, authConstraintMap)
 	}
@@ -71,7 +71,7 @@ func (r *UserRepository) CreateGuest(ctx context.Context, nickname string) (*dom
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
-		select id, email, password_hash, nickname, is_guest, created_at, updated_at, deleted_at
+		select id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
 		from users
 		where email = $1 and deleted_at is null
 	`
@@ -91,7 +91,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
-		select id, email, password_hash, nickname, is_guest, created_at, updated_at, deleted_at
+		select id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
 		from users
 		where id = $1 and deleted_at is null
 	`
@@ -111,7 +111,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 
 func (r *UserRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
-		select id, email, password_hash, nickname, is_guest, created_at, updated_at, deleted_at
+		select id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
 		from users
 		where id = $1 and deleted_at is null
 		for update

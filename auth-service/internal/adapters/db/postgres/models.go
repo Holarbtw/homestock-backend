@@ -11,6 +11,7 @@ type userDB struct {
 	Email        *string    `db:"email"`
 	PasswordHash *string    `db:"password_hash"`
 	Nickname     string     `db:"nickname"`
+	Timezone     string     `db:"timezone"`
 	IsGuest      bool       `db:"is_guest"`
 	CreatedAt    time.Time  `db:"created_at"`
 	UpdatedAt    time.Time  `db:"updated_at"`

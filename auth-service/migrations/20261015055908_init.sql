@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255),                      
     password_hash VARCHAR(255),               
     nickname VARCHAR(50) NOT NULL DEFAULT 'Гость',
+    timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     is_guest BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
