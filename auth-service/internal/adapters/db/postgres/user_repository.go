@@ -130,14 +130,14 @@ func (r *UserRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*d
 	return toDomainUser(&record), nil
 }
 
-func (r *UserRepository) LinkGuestAccount(ctx context.Context, userID uuid.UUID, email, passwordHash, nickname string) error {
+func (r *UserRepository) LinkGuestAccount(ctx context.Context, userID uuid.UUID, email, passwordHash string) error {
 	query := `
 		update users
-		set email = $1, password_hash = $2, nickname = $3, is_guest = false, updated_at = now()
-		where id = $4 and deleted_at is null
+		set email = $1, password_hash = $2, is_guest = false, updated_at = now()
+		where id = $3 and deleted_at is null
 	`
 
-	tag, err := r.getExecutor(ctx).Exec(ctx, query, email, passwordHash, nickname, userID)
+	tag, err := r.getExecutor(ctx).Exec(ctx, query, email, passwordHash, userID)
 	if err != nil {
 		return apperrors.MapPgError(err, authConstraintMap)
 	}
@@ -149,24 +149,14 @@ func (r *UserRepository) LinkGuestAccount(ctx context.Context, userID uuid.UUID,
 	return nil
 }
 
-func (r *UserRepository) CreateRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*domain.RefreshToken, error) {
+func (r *UserRepository) CreateRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	query := `
 		insert into refresh_tokens (user_id, token_hash, expires_at)
 		values ($1, $2, $3)
-		returning id, user_id, token_hash, expires_at, created_at, revoked_at
 	`
 
-	rows, err := r.getExecutor(ctx).Query(ctx, query, userID, tokenHash, expiresAt)
-	if err != nil {
-		return nil, apperrors.MapPgError(err, authConstraintMap)
-	}
-
-	record, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[refreshTokenDB])
-	if err != nil {
-		return nil, apperrors.MapPgError(err, authConstraintMap)
-	}
-
-	return toDomainRefreshToken(&record), nil
+	_, err := r.getExecutor(ctx).Exec(ctx, query, userID, tokenHash, expiresAt)
+	return apperrors.MapPgError(err, authConstraintMap)
 }
 
 func (r *UserRepository) GetRefreshToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error) {
@@ -218,3 +208,63 @@ func (r *UserRepository) RevokeAllUserTokens(ctx context.Context, userID uuid.UU
 
 	return nil
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	query := `
+		update users
+		set password_hash = $1, updated_at = now()
+		where id = $2 and deleted_at is null
+	`
+
+	tag, err := r.getExecutor(ctx).Exec(ctx, query, passwordHash, userID)
+	if err != nil {
+		return apperrors.MapPgError(err, authConstraintMap)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return apperrors.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *UserRepository) UpdateEmail(ctx context.Context, userID uuid.UUID, email string) error {
+	query := `
+		update users
+		set email = $1, updated_at = now()
+		where id = $2 and deleted_at is null
+	`
+
+	tag, err := r.getExecutor(ctx).Exec(ctx, query, email, userID)
+	if err != nil {
+		return apperrors.MapPgError(err, authConstraintMap)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return apperrors.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID uuid.UUID, nickname, timezone string) (*domain.User, error) {
+	query := `
+		update users
+		set nickname = $1, timezone = $2, updated_at = now()
+		where id = $3 and deleted_at is null
+		returning id, email, password_hash, nickname, timezone, is_guest, created_at, updated_at, deleted_at
+	`
+
+	rows, err := r.getExecutor(ctx).Query(ctx, query, nickname, timezone, userID)
+	if err != nil {
+		return nil, apperrors.MapPgError(err, authConstraintMap)
+	}
+
+	record, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[userDB])
+	if err != nil {
+		return nil, apperrors.MapPgError(err, authConstraintMap)
+	}
+
+	return toDomainUser(&record), nil
+}
+
