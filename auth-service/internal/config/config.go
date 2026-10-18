@@ -24,9 +24,17 @@ type DBConfig struct {
 }
 
 type JWTConfig struct {
-	Secret          string        `env:"JWT_SECRET" env-required:"true"`
-	AccessTokenTTL  time.Duration `env:"ACCESS_TOKEN_TTL_MINUTES" env-default:"15m"`
-	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL_DAYS" env-default:"720h"`
+	Secret                string `env:"JWT_SECRET" env-required:"true"`
+	AccessTokenTTLMinutes int    `env:"ACCESS_TOKEN_TTL_MINUTES" env-default:"15"`
+	RefreshTokenTTLDays   int    `env:"REFRESH_TOKEN_TTL_DAYS" env-default:"30"`
+}
+
+func (j *JWTConfig) AccessTokenTTL() time.Duration {
+	return time.Duration(j.AccessTokenTTLMinutes) * time.Minute
+}
+
+func (j *JWTConfig) RefreshTokenTTL() time.Duration {
+	return time.Duration(j.RefreshTokenTTLDays) * 24 * time.Hour
 }
 
 type SecurityConfig struct {
