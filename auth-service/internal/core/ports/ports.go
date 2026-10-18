@@ -33,3 +33,14 @@ type AuthService interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*domain.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
+
+type PasswordHasher interface {
+    Hash(password string) (string, error)
+    Compare(hash, password string) error
+}
+
+type TokenManager interface {
+    GenerateAccessToken(user *domain.User) (token string, expiresAt time.Time, err error)
+    GenerateRefreshToken() (rawToken string, tokenHash string, expiresAt time.Time, err error)
+	HashRefreshToken(rawToken string) string
+}
