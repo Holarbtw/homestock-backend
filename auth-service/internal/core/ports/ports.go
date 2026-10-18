@@ -41,6 +41,7 @@ type AuthService interface {
 	ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error
 	ChangeEmail(ctx context.Context, userID uuid.UUID, newEmail, password string) (*domain.User, error)
 	UpdateProfile(ctx context.Context, userID uuid.UUID, nickname, timezone string) (*domain.User, error)
+	GetProfile(ctx context.Context, userID uuid.UUID) (*domain.User, error)
 }
 
 type PasswordHasher interface {

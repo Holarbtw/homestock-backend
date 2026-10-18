@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Holarbtw/homestock-backend/auth-service/internal/domain"
+	"github.com/google/uuid"
 	pkgJWT "github.com/Holarbtw/homestock-backend/pkg/jwt"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -26,12 +26,12 @@ func NewJWTTokenManager(secret string, accessTokenTTL, refreshTokenTTL time.Dura
 	}
 }
 
-func (t *JWTTokenManager) GenerateAccessToken(user *domain.User) (token string, expiresAt time.Time, err error){
+func (t *JWTTokenManager) GenerateAccessToken(userID uuid.UUID) (token string, expiresAt time.Time, err error){
 	now := time.Now()
 	expiresAt = now.Add(t.accessTokenTTL)
 
 	claims := pkgJWT.UserClaims{
-		UserID: user.ID,
+		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt: jwt.NewNumericDate(now),
