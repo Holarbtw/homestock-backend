@@ -11,6 +11,7 @@ type User struct {
 	Email        *string
 	PasswordHash *string
 	Nickname     string
+	Timezone     string
 	IsGuest      bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

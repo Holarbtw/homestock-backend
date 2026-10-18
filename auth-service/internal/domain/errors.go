@@ -30,4 +30,10 @@ var (
 		StatusCode: http.StatusBadRequest,
 		Msg:        "Account is already linked to email",
 	}
+
+	ErrInvalidTimezone = &apperrors.CustomError{
+		Code:       "INVALID_TIMEZONE",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Invalid timezone format, expected IANA format (e.g. Europe/Moscow)",
+	}
 )

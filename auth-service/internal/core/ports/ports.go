@@ -13,8 +13,8 @@ type TxManager interface {
 }
 
 type UserRepository interface {
-	Create(ctx context.Context, email, passwordHash, nickname string) (*domain.User, error)
-	CreateGuest(ctx context.Context, nickname string) (*domain.User, error)
+	Create(ctx context.Context, email, passwordHash, nickname, timezone string) (*domain.User, error)
+	CreateGuest(ctx context.Context, nickname, timezone string) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.User, error)
@@ -27,9 +27,9 @@ type UserRepository interface {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, email, password, nickname string) (*domain.TokenPair, *domain.User, error)
+	Register(ctx context.Context, email, password, nickname, timezone string) (*domain.TokenPair, *domain.User, error)
 	Login(ctx context.Context, email, password string) (*domain.TokenPair, *domain.User, error)
-	LoginGuest(ctx context.Context, nickname string) (*domain.TokenPair, *domain.User, error)
+	LoginGuest(ctx context.Context, nickname, timezone string) (*domain.TokenPair, *domain.User, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*domain.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
