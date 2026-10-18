@@ -1,0 +1,485 @@
+basePath: /api/v1/auth
+definitions:
+  apperrors.CustomError:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+      status_code:
+        type: integer
+    type: object
+  internal_adapters_http.AuthResponse:
+    properties:
+      access_expires_at:
+        type: string
+      access_token:
+        example: eyJhbGciOi...
+        type: string
+      refresh_token:
+        example: a1b2c3...
+        type: string
+      user:
+        $ref: '#/definitions/internal_adapters_http.UserResponse'
+    type: object
+  internal_adapters_http.ChangeEmailRequest:
+    properties:
+      new_email:
+        example: new_user@example.com
+        type: string
+      password:
+        example: secret123
+        type: string
+    type: object
+  internal_adapters_http.ChangePasswordRequest:
+    properties:
+      new_password:
+        example: newsecret123
+        type: string
+      old_password:
+        example: oldsecret123
+        type: string
+    type: object
+  internal_adapters_http.GuestLoginRequest:
+    properties:
+      nickname:
+        example: Гость
+        type: string
+      timezone:
+        example: UTC
+        type: string
+    type: object
+  internal_adapters_http.LinkGuestRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: secret123
+        type: string
+    type: object
+  internal_adapters_http.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: secret123
+        type: string
+    type: object
+  internal_adapters_http.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: d290f1ee6...
+        type: string
+    type: object
+  internal_adapters_http.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      nickname:
+        example: Алексей
+        type: string
+      password:
+        example: secret123
+        type: string
+      timezone:
+        example: Europe/Moscow
+        type: string
+    type: object
+  internal_adapters_http.TokenResponse:
+    properties:
+      access_expires_at:
+        type: string
+      access_token:
+        example: eyJhbGciOi...
+        type: string
+      refresh_token:
+        example: a1b2c3...
+        type: string
+    type: object
+  internal_adapters_http.UpdateProfileRequest:
+    properties:
+      nickname:
+        example: НовыйНик
+        type: string
+      timezone:
+        example: Europe/Moscow
+        type: string
+    type: object
+  internal_adapters_http.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      is_guest:
+        example: false
+        type: boolean
+      nickname:
+        example: Алексей
+        type: string
+      timezone:
+        example: Europe/Moscow
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:80
+info:
+  contact: {}
+  description: Authentication and user profile service for Homestock project.
+  title: Homestock Auth Service API
+  version: "1.0"
+paths:
+  /email:
+    patch:
+      consumes:
+      - application/json
+      description: Changes the email address of the authenticated user.
+      parameters:
+      - description: New email and current password
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.ChangeEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.UserResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Unauthorized or wrong password
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Change email
+      tags:
+      - Profile
+  /guest-login:
+    post:
+      consumes:
+      - application/json
+      description: Creates an anonymous guest user account and returns an auth token
+        pair.
+      parameters:
+      - description: Guest login options
+        in: body
+        name: input
+        schema:
+          $ref: '#/definitions/internal_adapters_http.GuestLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_adapters_http.AuthResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      summary: Guest login
+      tags:
+      - Auth
+  /link-guest:
+    post:
+      consumes:
+      - application/json
+      description: Converts an active guest user account to a permanent registered
+        account.
+      parameters:
+      - description: Account credentials
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.LinkGuestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.UserResponse'
+        "400":
+          description: Validation error or account already linked
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Link guest account to email and password
+      tags:
+      - Auth
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returning an auth
+        token pair.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.AuthResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      summary: Login user
+      tags:
+      - Auth
+  /logout:
+    post:
+      consumes:
+      - application/json
+      description: Revokes the specified refresh token session.
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Successfully logged out
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      summary: Logout user
+      tags:
+      - Auth
+  /password:
+    patch:
+      consumes:
+      - application/json
+      description: Changes the password of the authenticated user and revokes other
+        active sessions.
+      parameters:
+      - description: Old and new password
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Password updated successfully
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Unauthorized or wrong old password
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Change password
+      tags:
+      - Profile
+  /profile:
+    get:
+      description: Returns the profile information of the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Get current user profile
+      tags:
+      - Profile
+    patch:
+      consumes:
+      - application/json
+      description: Updates nickname and/or timezone for the authenticated user.
+      parameters:
+      - description: Profile update input
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.UserResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Update user profile
+      tags:
+      - Profile
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refreshes the access token and returns a new rotated token pair.
+      parameters:
+      - description: Refresh token input
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_adapters_http.TokenResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: Invalid or revoked token
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      summary: Refresh token pair
+      tags:
+      - Auth
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account and returns an auth token pair.
+      parameters:
+      - description: Registration input
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_adapters_http.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_adapters_http.AuthResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "409":
+          description: User with this email already exists
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      summary: Register a new user
+      tags:
+      - Auth
+securityDefinitions:
+  ApiKeyAuth:
+    description: Type "Bearer " followed by a space and then your JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
