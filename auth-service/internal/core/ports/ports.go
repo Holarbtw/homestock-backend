@@ -18,15 +18,15 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.User, error)
-	LinkGuestAccount(ctx context.Context, userID uuid.UUID, email, passwordHash string) error
+	LinkGuestAccount(ctx context.Context, userID uuid.UUID, email, passwordHash string) (*domain.User, error)
 
 	CreateRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error
-	GetRefreshToken(ctx context.Context, tokenHash string) (*domain.RefreshToken, error)
+	GetRefreshTokenForUpdate(ctx context.Context, tokenHash string) (*domain.RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error
 
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
-	UpdateEmail(ctx context.Context, userID uuid.UUID, email string) error
+	UpdateEmail(ctx context.Context, userID uuid.UUID, email string) (*domain.User, error)
 	UpdateProfile(ctx context.Context, userID uuid.UUID, nickname, timezone string) (*domain.User, error)
 }
 

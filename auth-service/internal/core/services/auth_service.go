@@ -149,6 +149,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 }
 
 func (s *AuthService) LoginGuest(ctx context.Context, nickname, timezone string) (*domain.TokenPair, *domain.User, error){
+	if strings.TrimSpace(nickname) == "" {
+		nickname = defaultGuestNickname
+	}
 	validNickname, err := validateNickname(nickname)
 	if err != nil {
 		return nil, nil, err
@@ -191,32 +194,23 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 
 	tokenHash := s.tokenManager.HashRefreshToken(refreshToken)
 
-	token, err := s.userRepo.GetRefreshToken(ctx, tokenHash)
-	if err != nil {
-		if errors.Is(err, apperrors.ErrNotFound){
-			return nil, apperrors.ErrInvalidToken
-		}
-		return nil, err
-	}
-
-	if token.RevokedAt != nil{
-		if revokeErr := s.userRepo.RevokeAllUserTokens(ctx, token.UserID); revokeErr != nil {
-			slog.Error("failed to revoke all user tokens on reuse detection",
-				"user_id", token.UserID,
-				"err", revokeErr,
-			)
-		}
-		return nil, domain.ErrSessionRevoked
-	}
-
-	if time.Now().After(token.ExpiresAt){
-		return nil, apperrors.ErrInvalidToken
-	}
-
 	var tokens *domain.TokenPair
 
-	err = s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error{
-		var txErr error
+	err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error{
+		token, txErr := s.userRepo.GetRefreshTokenForUpdate(txCtx, tokenHash)
+		if txErr != nil {
+			if errors.Is(txErr, apperrors.ErrNotFound) {
+				return apperrors.ErrInvalidToken
+			}
+			return txErr
+		}
+
+		if token.RevokedAt != nil {
+			return domain.ErrSessionRevoked
+		}
+		if !time.Now().Before(token.ExpiresAt) {
+			return apperrors.ErrInvalidToken
+		}
 
 		txErr = s.userRepo.RevokeRefreshToken(txCtx, tokenHash)
 		if txErr != nil {
@@ -277,7 +271,7 @@ func (s *AuthService) LinkGuest(ctx context.Context, userID uuid.UUID, email, pa
 			return txErr
 		}
 
-		txErr = s.userRepo.LinkGuestAccount(txCtx, userID, validEmail, passwordHash)
+		user, txErr = s.userRepo.LinkGuestAccount(txCtx, userID, validEmail, passwordHash)
 		if txErr != nil {
 			return txErr
 		}
@@ -287,9 +281,6 @@ func (s *AuthService) LinkGuest(ctx context.Context, userID uuid.UUID, email, pa
 	if err != nil {
 		return nil, err
 	}
-
-	user.Email = &validEmail
-	user.IsGuest = false
 
 	return user, nil
 }
@@ -356,12 +347,12 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID uuid.UUID, newEmai
 		return nil, domain.ErrInvalidCredentials
 	}
 
-	if err := s.userRepo.UpdateEmail(ctx, userID, validEmail); err != nil {
+	updatedUser, err := s.userRepo.UpdateEmail(ctx, userID, validEmail)
+	if err != nil {
 		return nil, err
 	}
 
-	user.Email = &validEmail
-	return user, nil
+	return updatedUser, nil
 }
 
 func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, nickname, timezone string) (*domain.User, error) {

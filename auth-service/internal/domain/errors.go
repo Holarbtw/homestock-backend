@@ -46,12 +46,12 @@ var (
 	ErrInvalidPassword = &apperrors.CustomError{
 		Code:       "INVALID_PASSWORD",
 		StatusCode: http.StatusBadRequest,
-		Msg:        "Password must be between 8 and 72 characters",
+		Msg:        "Password must contain at least 8 characters and be at most 72 bytes",
 	}
 
 	ErrInvalidNickname = &apperrors.CustomError{
 		Code:       "INVALID_NICKNAME",
 		StatusCode: http.StatusBadRequest,
-		Msg:        "Nickname must be between 2 and 50 characters",
+		Msg:        "Nickname must be between 2 and 32 characters",
 	}
 )

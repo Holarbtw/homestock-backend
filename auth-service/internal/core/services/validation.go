@@ -11,12 +11,13 @@ import (
 )
 
 const (
-	minPasswordLen  = 8
-	maxPasswordLen  = 72 
-	minNicknameLen  = 2
-	maxNicknameLen  = 32
-	maxEmailLen     = 255
-	defaultTimezone = "UTC"
+	minPasswordLen       = 8
+	maxPasswordLen       = 72
+	minNicknameLen       = 2
+	maxNicknameLen       = 32
+	maxEmailLen          = 255
+	defaultGuestNickname = "Гость"
+	defaultTimezone      = "UTC"
 )
 
 func validateEmail(email string) (string, error) {
