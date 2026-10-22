@@ -2,7 +2,6 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-COPY go.work ./
 COPY pkg ./pkg
 COPY auth-service ./auth-service
 
