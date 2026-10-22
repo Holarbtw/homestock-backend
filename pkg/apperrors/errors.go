@@ -50,6 +50,24 @@ var (
 	ErrValidationFailed = &CustomError{Code: "VALIDATION_FAILED", StatusCode: http.StatusBadRequest, Msg: "Validation failed"}
 )
 
+var (
+	ErrInvalidQuantityFormat = &CustomError{
+		Code:       "INVALID_QUANTITY_FORMAT",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Invalid quantity format, expected a decimal number (e.g. 12.005)",
+	}
+	ErrQuantityPrecisionExceeded = &CustomError{
+		Code:       "QUANTITY_PRECISION_EXCEEDED",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Quantity must have at most three fractional digits",
+	}
+	ErrQuantityOutOfRange = &CustomError{
+		Code:       "QUANTITY_OUT_OF_RANGE",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Quantity is outside the supported range",
+	}
+)
+
 func RespondWithError(w http.ResponseWriter, r *http.Request, err error) {
 	*r = *r.WithContext(context.WithValue(r.Context(), errCtxKey, err))
 
