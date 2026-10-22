@@ -10,7 +10,8 @@ services:
     volumes:
       - ./gateway/auth.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
-      - auth-service
+      auth-service:
+        condition: service_healthy
     networks:
       - homestock-network
 
@@ -36,6 +37,11 @@ services:
         condition: service_healthy
       auth-migrations:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${AUTH_SERVICE_PORT:-8080}/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - homestock-network
 
@@ -47,6 +53,42 @@ services:
       - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${AUTH_DB_NAME:-homestock_auth} sslmode=disable
     volumes:
       - ./auth-service/migrations:/migrations
+    command: up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - homestock-network
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: catalog-service/Dockerfile
+    container_name: homestock-catalog-service
+    restart: "no"
+    environment:
+      - PORT=${CATALOG_SERVICE_PORT:-9090}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-homestock}
+      - DB_PASSWORD=${DB_PASSWORD:-homestock_secret}
+      - DB_NAME=${CATALOG_DB_NAME:-homestock_catalog}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog-migrations:
+        condition: service_completed_successfully
+    networks:
+      - homestock-network
+
+  catalog-migrations:
+    image: kukymbr/goose-docker
+    container_name: homestock-catalog-migrations
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${CATALOG_DB_NAME:-homestock_catalog} sslmode=disable
+    volumes:
+      - ./catalog-service/migrations:/migrations
     command: up
     depends_on:
       postgres:

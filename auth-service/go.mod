@@ -1,6 +1,6 @@
 module github.com/Holarbtw/homestock-backend/auth-service
 
-go 1.26
+go 1.26.4
 
 replace github.com/Holarbtw/homestock-backend/pkg => ../pkg
 

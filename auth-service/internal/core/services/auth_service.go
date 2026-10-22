@@ -343,7 +343,8 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID uuid.UUID, newEmai
 		return user, nil
 	}
 
-	if err := s.hasher.Compare(*user.PasswordHash, password); err != nil {
+	err = s.hasher.Compare(*user.PasswordHash, password)
+	if err != nil {
 		return nil, domain.ErrInvalidCredentials
 	}
 

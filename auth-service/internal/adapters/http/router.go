@@ -30,6 +30,10 @@ func NewRouter(handler *AuthHandler, jwtVerifier *pkgJWT.TokenVerifier) http.Han
 	r.Use(pkgLogger.LoggingMiddleware)
 	r.Use(middleware.Recoverer)
 
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	r.Group(func(r chi.Router) {
