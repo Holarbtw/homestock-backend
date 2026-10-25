@@ -38,6 +38,8 @@ umask 077
 mkdir -p "$deployment_home/backups"
 backup_file="$deployment_home/backups/auth-$(date -u +%Y%m%dT%H%M%S)-$IMAGE_TAG.sql.gz"
 
+# Expand these variables inside the PostgreSQL container, not on the host.
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T postgres sh -c \
   'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip > "$backup_file.tmp"
 mv -- "$backup_file.tmp" "$backup_file"
