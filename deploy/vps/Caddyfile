@@ -1,0 +1,17 @@
+{$API_DOMAIN} {
+	request_body {
+		max_size 1MB
+	}
+
+	handle_path /api/v1/auth/* {
+		reverse_proxy auth-service:8080
+	}
+
+	handle /healthz {
+		reverse_proxy auth-service:8080
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

@@ -1,0 +1,154 @@
+name: Auth VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - auth-service/**
+      - pkg/**
+      - deploy/**
+      - .dockerignore
+      - .gitattributes
+      - .github/workflows/auth-vps.yml
+  pull_request:
+    paths:
+      - auth-service/**
+      - pkg/**
+      - deploy/**
+      - .dockerignore
+      - .gitattributes
+      - .github/workflows/auth-vps.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-vps-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.images.outputs.tag }}
+      image_prefix: ${{ steps.images.outputs.prefix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: auth-service/go.mod
+          cache-dependency-path: |
+            auth-service/go.sum
+            pkg/go.sum
+      - name: Check Go packages
+        run: |
+          (cd pkg && go test ./...)
+          (cd auth-service && go test ./...)
+      - name: Check deployment scripts
+        run: |
+          for script in deploy/vps/*.sh deploy/test-deployment.sh; do bash -n "$script"; done
+          shellcheck deploy/vps/*.sh deploy/test-deployment.sh
+      - name: Image names
+        id: images
+        run: |
+          echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - name: Build auth image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: auth-service/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/auth-service:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=auth
+          cache-to: type=gha,mode=max,scope=auth
+      - name: Build migrations image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/auth-migrations.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/auth-migrations:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=auth-migrations
+          cache-to: type=gha,mode=max,scope=auth-migrations
+      - name: Check a fresh deployment and an update
+        env:
+          IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
+        run: bash deploy/test-deployment.sh "$IMAGE_PREFIX" "$IMAGE_TAG"
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested images
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
+        run: |
+          docker push "$IMAGE_PREFIX/auth-service:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/auth-migrations:$IMAGE_TAG"
+          echo "Published release: $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.VPS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$VPS_PORT" =~ ^[0-9]+$ ]]
+          [[ -n "$VPS_SSH_KEY" && -n "$VPS_KNOWN_HOSTS" ]]
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          printf 'Host *\n  BatchMode yes\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  ConnectTimeout 15\n' > ~/.ssh/config
+      - name: Deliver this release's deployment files
+        run: |
+          remote_dir="/opt/homestock/releases/$GITHUB_SHA"
+          tar -czf "$RUNNER_TEMP/release.tar.gz" -C deploy/vps compose.yml Caddyfile deploy.sh remote-deploy.sh
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
+          scp -P "$VPS_PORT" "$RUNNER_TEMP/release.tar.gz" "$VPS_USER@$VPS_HOST:$remote_dir/release.tar.gz"
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "tar -xzf '$remote_dir/release.tar.gz' -C '$remote_dir'"
+      - name: Pull images, back up the database, migrate and deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          printf -v command 'bash %q %q %q' \
+            "/opt/homestock/releases/$GITHUB_SHA/remote-deploy.sh" "$IMAGE_TAG" "$GHCR_USER"
+          printf '%s' "$GHCR_TOKEN" | ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "$command"
+          echo "Deployed release: $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"

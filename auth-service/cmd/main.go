@@ -26,7 +26,6 @@ import (
 // @title Homestock Auth Service API
 // @version 1.0
 // @description Authentication and user profile service for Homestock project.
-// @host localhost:80
 // @BasePath /api/v1/auth
 //
 // @securityDefinitions.apikey ApiKeyAuth
