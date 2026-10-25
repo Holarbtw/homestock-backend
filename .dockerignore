@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+.cache
+.tmp
+deploy
+bin
+dist
+**/*.exe
+**/*.test
+**/*.out
