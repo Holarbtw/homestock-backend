@@ -4,6 +4,12 @@ All paths below are relative to `/api/v1/auth`. Send JSON request bodies with `C
 
 Protected operations require `Authorization: Bearer <access_token>`. Registration, login, guest login, refresh and logout do not require this header. Refresh and logout identify the session using `refresh_token` in the request body.
 
+### Swagger access (VPS)
+
+The VPS gateway requires separate HTTP Basic credentials for `/api/v1/auth/swagger` and every path below it, including the UI, assets and `doc.json`. Open `/api/v1/auth/swagger/index.html` over HTTPS and enter the documentation username and password in the browser prompt. Missing or incorrect credentials return a gateway `401` with a `WWW-Authenticate: Basic` challenge; its body is not the application's JSON error schema. A JWT does not unlock Swagger.
+
+These credentials are for developers only. API requests from the mobile application still use the Bearer rules above and do not need the Swagger password. In Swagger UI, use the **Authorize** button to set a JWT for protected API operations after opening the documentation. The local Nginx gateway from the root Compose file keeps Swagger accessible without Basic authentication.
+
 ### Dates and response fields
 
 `access_expires_at`, `created_at` and `updated_at` are RFC 3339 timestamps in UTC, ending in `Z`, for example `2026-10-25T10:00:00Z` or `2026-10-25T10:00:00.123456Z`. Fractional seconds are optional and may contain up to nine digits. The profile's `timezone` does not change these timestamps; it is a separate user preference.
@@ -58,6 +64,23 @@ Input rules:
 - Timezones are trimmed and must be supported IANA timezone names, such as `Europe/Moscow`, or `UTC`. Registration and guest login use `UTC` for blank values. A blank timezone in `PATCH /profile` keeps the existing timezone.
 
 The current JSON decoder does not independently enforce schema `required` fields. Missing string fields, and string fields set to JSON `null`, decode as empty strings; service validation or the defaults above then apply. A top-level `null` also decodes as an empty request. This does **not** provide a way to clear a field. Malformed JSON or a number/array/object supplied for a string field returns `400 INVALID_REQUEST`. Unknown JSON fields are currently ignored. Clients should send one JSON object and use the documented fields and types.
+
+### Gateway rate limits (VPS)
+
+The VPS Caddy gateway applies these initial limits. Every window is sliding; limits with the same scope are shared across the listed operations.
+
+| Operations | Per IP | All IPs combined |
+| --- | --- | --- |
+| `POST /login`, `/register`, `/guest-login`, `/link-guest`, `/refresh`; `PATCH /password`, `/email` | See the rows below | 10 requests / second |
+| The same operations except `/refresh` | 5 requests / 5 seconds | The shared limit above |
+| `POST /register` and `/guest-login` together | Additionally 5 requests / minute | Additionally 100 requests / hour and 500 requests / 24 hours |
+| `POST /refresh` | 20 requests / minute | Additionally 100 requests / minute |
+
+`GET/PATCH /profile`, `/logout`, Swagger and health checks do not consume these budgets. These limits are configured for the VPS gateway; the local Nginx gateway in the root Compose file does not apply them.
+
+On a limit violation Caddy returns **HTTP 429** with `Retry-After` as an integer number of seconds. The request is rejected before reaching auth-service. The body may be empty or plain text, so do not expect the application's JSON error schema or a `code` value. Wait at least the indicated delay before retrying. In particular, keep the current refresh token on a 429 response: the rejected refresh request did not rotate it.
+
+Requests with invalid data also consume the limits they reach. A request rejected by an earlier limiter does not necessarily reach later limiters. Multiple devices behind the same public IP share the per-IP allowance. Global limits may temporarily reject legitimate new registrations during abuse. Counters are held in one Caddy process and reset when it restarts; these are request limits, not durable quotas of database records or a token cleanup policy.
 
 ### Error format
 

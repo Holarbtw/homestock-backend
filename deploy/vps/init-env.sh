@@ -19,6 +19,17 @@ if [[ ! "$image_prefix" =~ ^[a-z0-9][a-z0-9./_-]+$ ]]; then
   exit 1
 fi
 
+swagger_username=${SWAGGER_USERNAME:-docs}
+swagger_password_hash=${SWAGGER_PASSWORD_HASH:-}
+if [[ ! "$swagger_username" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+  echo "SWAGGER_USERNAME must contain only letters, digits, dots, underscores or hyphens." >&2
+  exit 1
+fi
+if [[ -n "$swagger_password_hash" && ! "$swagger_password_hash" =~ ^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$ ]]; then
+  echo "SWAGGER_PASSWORD_HASH must be a complete bcrypt hash." >&2
+  exit 1
+fi
+
 umask 077
 mkdir -p "$deployment_home"
 env_file="$deployment_home/.env"
@@ -38,6 +49,8 @@ DB_USER=homestock
 AUTH_DB_NAME=homestock_auth
 DB_PASSWORD=$db_password
 JWT_SECRET=$jwt_secret
+SWAGGER_USERNAME=$swagger_username
+SWAGGER_PASSWORD_HASH='$swagger_password_hash'
 HTTP_PORT=80
 HTTPS_PORT=443
 ACCESS_TOKEN_TTL_MINUTES=15
@@ -46,3 +59,6 @@ BCRYPT_COST=10
 EOF
 )
 echo "Created $env_file with generated secrets. Keep this file between deployments."
+if [[ -z "$swagger_password_hash" ]]; then
+  echo "Before deployment, set SWAGGER_PASSWORD_HASH in $env_file using caddy hash-password."
+fi

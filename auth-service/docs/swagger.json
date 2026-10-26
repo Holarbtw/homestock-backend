@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "### Authentication contract\n\nAll paths below are relative to `/api/v1/auth`. Send JSON request bodies with `Content-Type: application/json`.\n\nProtected operations require `Authorization: Bearer \u003caccess_token\u003e`. Registration, login, guest login, refresh and logout do not require this header. Refresh and logout identify the session using `refresh_token` in the request body.\n\n### Dates and response fields\n\n`access_expires_at`, `created_at` and `updated_at` are RFC 3339 timestamps in UTC, ending in `Z`, for example `2026-10-25T10:00:00Z` or `2026-10-25T10:00:00.123456Z`. Fractional seconds are optional and may contain up to nine digits. The profile's `timezone` does not change these timestamps; it is a separate user preference.\n\n`required` means a JSON key must be present. It does not mean the key can contain `null`. An optional key may be absent; a nullable value may explicitly be `null`. These are different properties of the contract.\n\nSuccessful response objects always include the following keys with non-null values:\n\n| Response | Always present |\n| --- | --- |\n| `AuthResponse` | `access_token`, `refresh_token`, `access_expires_at`, `user` |\n| `TokenResponse` | `access_token`, `refresh_token`, `access_expires_at` |\n| `UserResponse` | `id`, `nickname`, `timezone`, `is_guest`, `created_at`, `updated_at` |\n\n`UserResponse.email` is a string when available. For a guest, the key is **omitted**, rather than sent as `null` or `\"\"`. Handle the absent key when decoding a guest profile. Responses with status `204` have no body.\n\nExample guest profile (the `user` object inside a guest-login response, or the body of `GET /profile`):\n\n```json\n{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"nickname\": \"Гость\",\n  \"timezone\": \"UTC\",\n  \"is_guest\": true,\n  \"created_at\": \"2026-10-26T10:00:00Z\",\n  \"updated_at\": \"2026-10-26T10:00:00Z\"\n}\n```\n\nAfter linking, the same profile ID is returned with `is_guest: false` and an `email` string. The other profile keys remain present.\n\n### Request fields and defaults\n\n| Operation | Input needed for the operation | Optional input and defaults |\n| --- | --- | --- |\n| `POST /register` | `email`, `password`, `nickname` | `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /login` | `email`, `password` | None |\n| `POST /guest-login` | None; the body may be absent | `nickname`: defaults to `Гость` when omitted or blank; `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /refresh` | Nonempty `refresh_token` | None |\n| `POST /logout` | Nonempty `refresh_token` | None |\n| `POST /link-guest` | `email`, `password` | None |\n| `PATCH /password` | `old_password`, `new_password` | None |\n| `PATCH /email` | `new_email`, `password` for an actual change | Submitting the current normalized email is a no-op; the current implementation returns the profile before checking the password in this case |\n| `PATCH /profile` | A JSON body; no individual field is mandatory | Omitted or blank `nickname` and `timezone` keep their current values; `{}` is accepted |\n| `GET /profile` | No body | None |\n\nInput rules:\n\n- Email is trimmed, validated as an address without a display name and converted to lowercase. Its trimmed length must be at most 255 UTF-8 bytes.\n- A new password, or a password submitted to `/login`, must contain at least eight Unicode code points and at most 72 UTF-8 bytes. Passwords are not trimmed. Multibyte characters count towards the byte limit. The current password supplied to a password/email change is checked against the stored hash.\n- Nicknames are trimmed and must contain 2-32 Unicode code points after trimming. Guest login applies its default before this validation.\n- Timezones are trimmed and must be supported IANA timezone names, such as `Europe/Moscow`, or `UTC`. Registration and guest login use `UTC` for blank values. A blank timezone in `PATCH /profile` keeps the existing timezone.\n\nThe current JSON decoder does not independently enforce schema `required` fields. Missing string fields, and string fields set to JSON `null`, decode as empty strings; service validation or the defaults above then apply. A top-level `null` also decodes as an empty request. This does **not** provide a way to clear a field. Malformed JSON or a number/array/object supplied for a string field returns `400 INVALID_REQUEST`. Unknown JSON fields are currently ignored. Clients should send one JSON object and use the documented fields and types.\n\n### Error format\n\nErrors returned by the auth application's error handler have this shape:\n\n```json\n{\n  \"code\": \"EMAIL_ALREADY_EXISTS\",\n  \"status_code\": 409,\n  \"message\": \"User with this email already exists\"\n}\n```\n\nAll three keys are present. `status_code` matches the HTTP status. Internal causes and database details are not included in the JSON response.\n\nUse `code` to select a localized UI message or action. Do not compare the English `message` text. Handle an unknown code with a generic fallback based on the HTTP status. Router-generated, proxy-generated and panic-recovery responses can have another body format; the client must also handle an empty or non-JSON error body.\n\n| HTTP | Code | Meaning |\n| --- | --- | --- |\n| 400 | `INVALID_REQUEST` | The JSON request cannot be decoded, including a wrong value type or a body that exceeds the application's decoder limit |\n| 400 | `INVALID_EMAIL` | The email is missing or has an invalid format/length |\n| 400 | `INVALID_PASSWORD` | The submitted password does not meet the length rules |\n| 400 | `INVALID_NICKNAME` | The nickname does not meet the length rules |\n| 400 | `INVALID_TIMEZONE` | The timezone is not supported |\n| 400 | `GUEST_ALREADY_LINKED` | The account is already a permanent account |\n| 401 | `INVALID_CREDENTIALS` | Login credentials or the current password are incorrect; also returned when the account has no password |\n| 401 | `UNAUTHORIZED` | The Bearer authorization header is missing or malformed |\n| 401 | `INVALID_TOKEN` | The access token is invalid/expired, or the refresh token is missing, unknown or expired; see endpoint behavior below |\n| 401 | `SESSION_REVOKED` | The refresh token has already been revoked, including a token consumed by successful rotation |\n| 404 | `NOT_FOUND` | The requested user no longer exists or is deleted |\n| 409 | `EMAIL_ALREADY_EXISTS` | Another active account uses this email |\n| 400 | `VALIDATION_FAILED` | A database constraint rejected the data; a generic infrastructure fallback |\n| 409 | `CONFLICT` | A database uniqueness constraint rejected the write without a more specific mapping |\n| 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |",
+        "description": "### Authentication contract\n\nAll paths below are relative to `/api/v1/auth`. Send JSON request bodies with `Content-Type: application/json`.\n\nProtected operations require `Authorization: Bearer \u003caccess_token\u003e`. Registration, login, guest login, refresh and logout do not require this header. Refresh and logout identify the session using `refresh_token` in the request body.\n\n### Swagger access (VPS)\n\nThe VPS gateway requires separate HTTP Basic credentials for `/api/v1/auth/swagger` and every path below it, including the UI, assets and `doc.json`. Open `/api/v1/auth/swagger/index.html` over HTTPS and enter the documentation username and password in the browser prompt. Missing or incorrect credentials return a gateway `401` with a `WWW-Authenticate: Basic` challenge; its body is not the application's JSON error schema. A JWT does not unlock Swagger.\n\nThese credentials are for developers only. API requests from the mobile application still use the Bearer rules above and do not need the Swagger password. In Swagger UI, use the **Authorize** button to set a JWT for protected API operations after opening the documentation. The local Nginx gateway from the root Compose file keeps Swagger accessible without Basic authentication.\n\n### Dates and response fields\n\n`access_expires_at`, `created_at` and `updated_at` are RFC 3339 timestamps in UTC, ending in `Z`, for example `2026-10-25T10:00:00Z` or `2026-10-25T10:00:00.123456Z`. Fractional seconds are optional and may contain up to nine digits. The profile's `timezone` does not change these timestamps; it is a separate user preference.\n\n`required` means a JSON key must be present. It does not mean the key can contain `null`. An optional key may be absent; a nullable value may explicitly be `null`. These are different properties of the contract.\n\nSuccessful response objects always include the following keys with non-null values:\n\n| Response | Always present |\n| --- | --- |\n| `AuthResponse` | `access_token`, `refresh_token`, `access_expires_at`, `user` |\n| `TokenResponse` | `access_token`, `refresh_token`, `access_expires_at` |\n| `UserResponse` | `id`, `nickname`, `timezone`, `is_guest`, `created_at`, `updated_at` |\n\n`UserResponse.email` is a string when available. For a guest, the key is **omitted**, rather than sent as `null` or `\"\"`. Handle the absent key when decoding a guest profile. Responses with status `204` have no body.\n\nExample guest profile (the `user` object inside a guest-login response, or the body of `GET /profile`):\n\n```json\n{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"nickname\": \"Гость\",\n  \"timezone\": \"UTC\",\n  \"is_guest\": true,\n  \"created_at\": \"2026-10-26T10:00:00Z\",\n  \"updated_at\": \"2026-10-26T10:00:00Z\"\n}\n```\n\nAfter linking, the same profile ID is returned with `is_guest: false` and an `email` string. The other profile keys remain present.\n\n### Request fields and defaults\n\n| Operation | Input needed for the operation | Optional input and defaults |\n| --- | --- | --- |\n| `POST /register` | `email`, `password`, `nickname` | `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /login` | `email`, `password` | None |\n| `POST /guest-login` | None; the body may be absent | `nickname`: defaults to `Гость` when omitted or blank; `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /refresh` | Nonempty `refresh_token` | None |\n| `POST /logout` | Nonempty `refresh_token` | None |\n| `POST /link-guest` | `email`, `password` | None |\n| `PATCH /password` | `old_password`, `new_password` | None |\n| `PATCH /email` | `new_email`, `password` for an actual change | Submitting the current normalized email is a no-op; the current implementation returns the profile before checking the password in this case |\n| `PATCH /profile` | A JSON body; no individual field is mandatory | Omitted or blank `nickname` and `timezone` keep their current values; `{}` is accepted |\n| `GET /profile` | No body | None |\n\nInput rules:\n\n- Email is trimmed, validated as an address without a display name and converted to lowercase. Its trimmed length must be at most 255 UTF-8 bytes.\n- A new password, or a password submitted to `/login`, must contain at least eight Unicode code points and at most 72 UTF-8 bytes. Passwords are not trimmed. Multibyte characters count towards the byte limit. The current password supplied to a password/email change is checked against the stored hash.\n- Nicknames are trimmed and must contain 2-32 Unicode code points after trimming. Guest login applies its default before this validation.\n- Timezones are trimmed and must be supported IANA timezone names, such as `Europe/Moscow`, or `UTC`. Registration and guest login use `UTC` for blank values. A blank timezone in `PATCH /profile` keeps the existing timezone.\n\nThe current JSON decoder does not independently enforce schema `required` fields. Missing string fields, and string fields set to JSON `null`, decode as empty strings; service validation or the defaults above then apply. A top-level `null` also decodes as an empty request. This does **not** provide a way to clear a field. Malformed JSON or a number/array/object supplied for a string field returns `400 INVALID_REQUEST`. Unknown JSON fields are currently ignored. Clients should send one JSON object and use the documented fields and types.\n\n### Gateway rate limits (VPS)\n\nThe VPS Caddy gateway applies these initial limits. Every window is sliding; limits with the same scope are shared across the listed operations.\n\n| Operations | Per IP | All IPs combined |\n| --- | --- | --- |\n| `POST /login`, `/register`, `/guest-login`, `/link-guest`, `/refresh`; `PATCH /password`, `/email` | See the rows below | 10 requests / second |\n| The same operations except `/refresh` | 5 requests / 5 seconds | The shared limit above |\n| `POST /register` and `/guest-login` together | Additionally 5 requests / minute | Additionally 100 requests / hour and 500 requests / 24 hours |\n| `POST /refresh` | 20 requests / minute | Additionally 100 requests / minute |\n\n`GET/PATCH /profile`, `/logout`, Swagger and health checks do not consume these budgets. These limits are configured for the VPS gateway; the local Nginx gateway in the root Compose file does not apply them.\n\nOn a limit violation Caddy returns **HTTP 429** with `Retry-After` as an integer number of seconds. The request is rejected before reaching auth-service. The body may be empty or plain text, so do not expect the application's JSON error schema or a `code` value. Wait at least the indicated delay before retrying. In particular, keep the current refresh token on a 429 response: the rejected refresh request did not rotate it.\n\nRequests with invalid data also consume the limits they reach. A request rejected by an earlier limiter does not necessarily reach later limiters. Multiple devices behind the same public IP share the per-IP allowance. Global limits may temporarily reject legitimate new registrations during abuse. Counters are held in one Caddy process and reset when it restarts; these are request limits, not durable quotas of database records or a token cleanup policy.\n\n### Error format\n\nErrors returned by the auth application's error handler have this shape:\n\n```json\n{\n  \"code\": \"EMAIL_ALREADY_EXISTS\",\n  \"status_code\": 409,\n  \"message\": \"User with this email already exists\"\n}\n```\n\nAll three keys are present. `status_code` matches the HTTP status. Internal causes and database details are not included in the JSON response.\n\nUse `code` to select a localized UI message or action. Do not compare the English `message` text. Handle an unknown code with a generic fallback based on the HTTP status. Router-generated, proxy-generated and panic-recovery responses can have another body format; the client must also handle an empty or non-JSON error body.\n\n| HTTP | Code | Meaning |\n| --- | --- | --- |\n| 400 | `INVALID_REQUEST` | The JSON request cannot be decoded, including a wrong value type or a body that exceeds the application's decoder limit |\n| 400 | `INVALID_EMAIL` | The email is missing or has an invalid format/length |\n| 400 | `INVALID_PASSWORD` | The submitted password does not meet the length rules |\n| 400 | `INVALID_NICKNAME` | The nickname does not meet the length rules |\n| 400 | `INVALID_TIMEZONE` | The timezone is not supported |\n| 400 | `GUEST_ALREADY_LINKED` | The account is already a permanent account |\n| 401 | `INVALID_CREDENTIALS` | Login credentials or the current password are incorrect; also returned when the account has no password |\n| 401 | `UNAUTHORIZED` | The Bearer authorization header is missing or malformed |\n| 401 | `INVALID_TOKEN` | The access token is invalid/expired, or the refresh token is missing, unknown or expired; see endpoint behavior below |\n| 401 | `SESSION_REVOKED` | The refresh token has already been revoked, including a token consumed by successful rotation |\n| 404 | `NOT_FOUND` | The requested user no longer exists or is deleted |\n| 409 | `EMAIL_ALREADY_EXISTS` | Another active account uses this email |\n| 400 | `VALIDATION_FAILED` | A database constraint rejected the data; a generic infrastructure fallback |\n| 409 | `CONFLICT` | A database uniqueness constraint rejected the write without a more specific mapping |\n| 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |\n",
         "title": "Homestock Auth Service API",
         "contact": {},
         "version": "1.0"
@@ -68,6 +68,18 @@
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
@@ -111,6 +123,18 @@
                         "description": "INVALID_REQUEST, INVALID_NICKNAME, INVALID_TIMEZONE",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
                         }
                     },
                     "500": {
@@ -182,6 +206,18 @@
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
@@ -232,6 +268,18 @@
                         "description": "INVALID_CREDENTIALS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
                         }
                     },
                     "500": {
@@ -341,6 +389,18 @@
                         "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
                         }
                     },
                     "500": {
@@ -499,6 +559,18 @@
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying; the current refresh token was not consumed"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
@@ -549,6 +621,18 @@
                         "description": "EMAIL_ALREADY_EXISTS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "429": {
+                        "description": "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "Seconds to wait before retrying"
+                            }
                         }
                     },
                     "500": {

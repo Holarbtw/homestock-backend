@@ -35,6 +35,8 @@ func sendJSON(w http.ResponseWriter, status int, data any) {
 // @Success 201 {object} AuthResponse
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST, INVALID_EMAIL, INVALID_PASSWORD, INVALID_NICKNAME, INVALID_TIMEZONE"
 // @Failure 409 {object} apperrors.CustomError "EMAIL_ALREADY_EXISTS"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +71,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} AuthResponse
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST, INVALID_EMAIL, INVALID_PASSWORD"
 // @Failure 401 {object} apperrors.CustomError "INVALID_CREDENTIALS"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +106,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Param input body GuestLoginRequest false "Guest login options"
 // @Success 201 {object} AuthResponse
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST, INVALID_NICKNAME, INVALID_TIMEZONE"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /guest-login [post]
 func (h *AuthHandler) LoginGuest(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +142,8 @@ func (h *AuthHandler) LoginGuest(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} TokenResponse
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST"
 // @Failure 401 {object} apperrors.CustomError "INVALID_TOKEN (missing, unknown or expired refresh token), SESSION_REVOKED (already revoked or rotated refresh token)"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying; the current refresh token was not consumed"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /refresh [post]
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +208,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} apperrors.CustomError "UNAUTHORIZED, INVALID_TOKEN"
 // @Failure 404 {object} apperrors.CustomError "NOT_FOUND"
 // @Failure 409 {object} apperrors.CustomError "EMAIL_ALREADY_EXISTS"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /link-guest [post]
 func (h *AuthHandler) LinkGuest(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +246,8 @@ func (h *AuthHandler) LinkGuest(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST, INVALID_PASSWORD (new_password)"
 // @Failure 401 {object} apperrors.CustomError "UNAUTHORIZED, INVALID_TOKEN, INVALID_CREDENTIALS (wrong old password or guest account)"
 // @Failure 404 {object} apperrors.CustomError "NOT_FOUND"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /password [patch]
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +286,8 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} apperrors.CustomError "UNAUTHORIZED, INVALID_TOKEN, INVALID_CREDENTIALS (wrong password or guest account)"
 // @Failure 404 {object} apperrors.CustomError "NOT_FOUND"
 // @Failure 409 {object} apperrors.CustomError "EMAIL_ALREADY_EXISTS"
+// @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
+// @Header 429 {integer} Retry-After "Seconds to wait before retrying"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"
 // @Router /email [patch]
 func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {

@@ -16,6 +16,12 @@ export HOMESTOCK_SKIP_PULL=1
 export HOMESTOCK_PROJECT
 HOMESTOCK_PROJECT="homestock-ci-$(date +%s)-$$"
 
+export SWAGGER_USERNAME=ci-docs
+SWAGGER_PASSWORD=$(openssl rand -hex 24)
+export SWAGGER_PASSWORD
+SWAGGER_PASSWORD_HASH=$(printf '%s\n' "$SWAGGER_PASSWORD" | docker run --rm -i "$IMAGE_PREFIX/gateway:$IMAGE_TAG" caddy hash-password --algorithm bcrypt --bcrypt-cost 10)
+export SWAGGER_PASSWORD_HASH
+
 bash "$script_dir/vps/init-env.sh" "$HOMESTOCK_HOME" http://localhost "$IMAGE_PREFIX"
 compose=(docker compose --project-name "$HOMESTOCK_PROJECT" --env-file "$HOMESTOCK_HOME/.env" -f "$script_dir/vps/compose.yml")
 cleanup() {

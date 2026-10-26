@@ -35,8 +35,10 @@ type tokens struct {
 }
 
 type api struct {
-	base   string
-	client *http.Client
+	base            string
+	client          *http.Client
+	swaggerUsername string
+	swaggerPassword string
 }
 
 func (a api) request(method, path string, expected int, data any, token string, result any) error {
@@ -54,7 +56,9 @@ func (a api) request(method, path string, expected int, data any, token string, 
 	if data != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if token != "" {
+	if path == "/swagger" || strings.HasPrefix(path, "/swagger/") {
+		req.SetBasicAuth(a.swaggerUsername, a.swaggerPassword)
+	} else if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := a.client.Do(req)
@@ -68,6 +72,50 @@ func (a api) request(method, path string, expected int, data any, token string, 
 	if result != nil {
 		return json.NewDecoder(resp.Body).Decode(result)
 	}
+	return nil
+}
+
+func checkSwaggerAuth(a api, token string) error {
+	tests := []struct {
+		name, path, password, token string
+	}{
+		{"anonymous root", "/swagger", "", ""},
+		{"anonymous directory", "/swagger/", "", ""},
+		{"anonymous UI", "/swagger/index.html", "", ""},
+		{"anonymous schema", "/swagger/doc.json", "", ""},
+		{"anonymous asset", "/swagger/swagger-ui.css", "", ""},
+		{"wrong password", "/swagger/doc.json", "wrong:" + a.swaggerPassword, ""},
+		{"Bearer is not Swagger authentication", "/swagger/doc.json", "", token},
+	}
+	for _, test := range tests {
+		req, err := http.NewRequest("GET", a.base+test.path, nil)
+		if err != nil {
+			return err
+		}
+		if test.password != "" {
+			req.SetBasicAuth(a.swaggerUsername, test.password)
+		} else if test.token != "" {
+			req.Header.Set("Authorization", "Bearer "+test.token)
+		}
+		resp, err := a.client.Do(req)
+		if err != nil {
+			return err
+		}
+		_, readErr := io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if resp.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(resp.Header.Get("WWW-Authenticate"), "Basic ") {
+			return fmt.Errorf("Swagger %s: expected 401 with a Basic authentication challenge, got HTTP %d", test.name, resp.StatusCode)
+		}
+	}
+	for _, path := range []string{"/swagger/index.html", "/swagger/swagger-ui.css"} {
+		if err := a.request("GET", path, 200, nil, "", nil); err != nil {
+			return fmt.Errorf("Swagger credentials rejected: %w", err)
+		}
+	}
+	fmt.Println("Swagger protection passed: anonymous/wrong-password/Bearer requests rejected; UI, schema and assets accept Basic authentication.")
 	return nil
 }
 
@@ -152,7 +200,15 @@ func checkRateLimit(a api, token string) error {
 }
 
 func check(baseURL, stateFile string, reuse bool) error {
-	a := api{strings.TrimRight(baseURL, "/") + "/api/v1/auth", &http.Client{Timeout: 15 * time.Second}}
+	a := api{
+		base:            strings.TrimRight(baseURL, "/") + "/api/v1/auth",
+		client:          &http.Client{Timeout: 15 * time.Second},
+		swaggerUsername: os.Getenv("SWAGGER_USERNAME"),
+		swaggerPassword: os.Getenv("SWAGGER_PASSWORD"),
+	}
+	if a.swaggerUsername == "" || a.swaggerPassword == "" {
+		return fmt.Errorf("set SWAGGER_USERNAME and SWAGGER_PASSWORD for the deployment smoke check")
+	}
 	if err := a.request("GET", "/healthz", 200, nil, "", nil); err != nil {
 		return err
 	}
@@ -211,6 +267,9 @@ func check(baseURL, stateFile string, reuse bool) error {
 	}
 	if profile.ID != saved.UserID || profile.Email != saved.Email {
 		return fmt.Errorf("the account did not survive deployment")
+	}
+	if err := checkSwaggerAuth(a, loggedIn.AccessToken); err != nil {
+		return err
 	}
 	var refreshed tokens
 	if err := a.request("POST", "/refresh", 200, map[string]string{"refresh_token": loggedIn.RefreshToken}, "", &refreshed); err != nil {

@@ -94,6 +94,11 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
+      - name: Check registration and refresh limits
+        env:
+          IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
+        run: go run deploy/check-rate-limits.go "$IMAGE_PREFIX/gateway:$IMAGE_TAG" deploy/vps/Caddyfile
       - name: Check a fresh deployment and an update
         env:
           IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}

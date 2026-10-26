@@ -3,7 +3,10 @@
 		max_size 1MB
 	}
 
-	# Preserve the order: global budget, per-IP budget, then path rewriting.
+	@swagger path /api/v1/auth/swagger /api/v1/auth/swagger/*
+
+	# Preserve the order: short global guard, IP budgets, long global budgets,
+	# then path rewriting. Rejected requests never reach auth-service.
 	route {
 		# Bound requests before allocating per-IP limiter state.
 		rate_limit {
@@ -11,7 +14,7 @@
 			zone auth_global {
 				match {
 					method POST
-					path /api/v1/auth/login /api/v1/auth/register /api/v1/auth/guest-login /api/v1/auth/link-guest
+					path /api/v1/auth/login /api/v1/auth/register /api/v1/auth/guest-login /api/v1/auth/link-guest /api/v1/auth/refresh
 				}
 				match {
 					method PATCH
@@ -40,6 +43,68 @@
 				events 5
 			}
 		}
+
+		# Endpoint budgets are independent: registration cannot consume refresh's
+		# minute allowance. Both registration paths share the same IP key.
+		rate_limit {
+			sweep_interval 5s
+			zone registration_per_ip {
+				match {
+					method POST
+					path /api/v1/auth/register /api/v1/auth/guest-login
+				}
+				key {remote_host}
+				window 1m
+				events 5
+			}
+			zone refresh_per_ip {
+				match {
+					method POST
+					path /api/v1/auth/refresh
+				}
+				key {remote_host}
+				window 1m
+				events 20
+			}
+		}
+
+		rate_limit {
+			sweep_interval 5s
+			zone registration_global_hour {
+				match {
+					method POST
+					path /api/v1/auth/register /api/v1/auth/guest-login
+				}
+				key registration
+				window 1h
+				events 100
+			}
+			zone registration_global_day {
+				match {
+					method POST
+					path /api/v1/auth/register /api/v1/auth/guest-login
+				}
+				key registration
+				window 24h
+				events 500
+			}
+			zone refresh_global {
+				match {
+					method POST
+					path /api/v1/auth/refresh
+				}
+				key refresh
+				window 1m
+				events 100
+			}
+		}
+
+		# Protect both the UI and the schema. Credentials are supplied only to
+		# the gateway; the application's API continues to use Bearer JWTs.
+		basic_auth @swagger bcrypt "HomeStock Swagger" {
+			{env.SWAGGER_USERNAME} {env.SWAGGER_PASSWORD_HASH}
+		}
+		request_header @swagger -Authorization
 
 		handle_path /api/v1/auth/* {
 			reverse_proxy auth-service:8080 {
