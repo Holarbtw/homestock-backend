@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -77,6 +79,78 @@ func randomHex() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
+func (a api) malformedAuthRequest(method, path, token string, client int) (int, http.Header, error) {
+	req, err := http.NewRequest(method, a.base+path, strings.NewReader("{"))
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "True-Client-IP"} {
+		req.Header.Set(header, fmt.Sprintf("192.0.2.%d", client))
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return 0, nil, err
+	}
+	return resp.StatusCode, resp.Header.Clone(), nil
+}
+
+func checkRateLimit(a api, token string) error {
+	time.Sleep(5100 * time.Millisecond)
+	routes := []struct{ method, path string }{
+		{"POST", "/login"},
+		{"POST", "/register"},
+		{"POST", "/guest-login"},
+		{"POST", "/link-guest"},
+		{"PATCH", "/password"},
+		{"PATCH", "/email"},
+	}
+	var retryAfter string
+	for i, route := range routes {
+		status, headers, err := a.malformedAuthRequest(route.method, route.path, token, i+1)
+		if err != nil {
+			return err
+		}
+		expected := http.StatusBadRequest
+		if i == len(routes)-1 {
+			expected = http.StatusTooManyRequests
+			retryAfter = headers.Get("Retry-After")
+		}
+		if status != expected {
+			return fmt.Errorf("rate limit: %s %s returned HTTP %d, expected %d", route.method, route.path, status, expected)
+		}
+	}
+	seconds, err := strconv.Atoi(retryAfter)
+	if err != nil || seconds < 1 || seconds > 6 {
+		return fmt.Errorf("rate limit: invalid Retry-After %q", retryAfter)
+	}
+	if err := a.request("GET", "/healthz", 200, nil, "", nil); err != nil {
+		return fmt.Errorf("health endpoint was affected by the auth limit: %w", err)
+	}
+	if err := a.request("GET", "/swagger/doc.json", 200, nil, "", nil); err != nil {
+		return fmt.Errorf("Swagger was affected by the auth limit: %w", err)
+	}
+	if err := a.request("GET", "/profile", 200, nil, token, nil); err != nil {
+		return fmt.Errorf("profile endpoint was affected by the auth limit: %w", err)
+	}
+	time.Sleep(time.Duration(seconds)*time.Second + 200*time.Millisecond)
+	status, _, err := a.malformedAuthRequest("POST", "/login", token, 100)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusBadRequest {
+		return fmt.Errorf("rate limit did not recover after Retry-After: HTTP %d", status)
+	}
+	fmt.Println("Gateway rate limit passed: shared auth allowance, spoof resistance, 429, Retry-After and recovery.")
+	return nil
+}
+
 func check(baseURL, stateFile string, reuse bool) error {
 	a := api{strings.TrimRight(baseURL, "/") + "/api/v1/auth", &http.Client{Timeout: 15 * time.Second}}
 	if err := a.request("GET", "/healthz", 200, nil, "", nil); err != nil {
@@ -143,6 +217,9 @@ func check(baseURL, stateFile string, reuse bool) error {
 		return err
 	}
 	if err := a.request("GET", "/profile", 200, nil, refreshed.AccessToken, &profile); err != nil {
+		return err
+	}
+	if err := checkRateLimit(a, refreshed.AccessToken); err != nil {
 		return err
 	}
 	return a.request("POST", "/logout", 204, map[string]string{"refresh_token": refreshed.RefreshToken}, "", nil)
