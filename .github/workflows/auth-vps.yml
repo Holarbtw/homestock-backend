@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -83,6 +83,17 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=auth-migrations
           cache-to: type=gha,mode=max,scope=auth-migrations
+      - name: Build gateway image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/gateway.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/gateway:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
       - name: Check a fresh deployment and an update
         env:
           IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
@@ -103,6 +114,7 @@ jobs:
         run: |
           docker push "$IMAGE_PREFIX/auth-service:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/auth-migrations:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/gateway:$IMAGE_TAG"
           echo "Published release: $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:

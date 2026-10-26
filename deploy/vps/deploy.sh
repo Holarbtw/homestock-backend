@@ -23,16 +23,25 @@ compose=(docker compose --project-name "${HOMESTOCK_PROJECT:-homestock-vps}" --e
 diagnostics() {
   echo "Deployment failed. Inspect the logs before retrying; no database rollback was performed." >&2
   "${compose[@]}" ps -a || true
-  "${compose[@]}" logs --tail=60 auth-service gateway || true
+  "${compose[@]}" logs --tail=60 postgres auth-service gateway || true
 }
 trap diagnostics ERR
 
 "${compose[@]}" config --quiet
+postgres_container=$("${compose[@]}" ps --all --quiet postgres)
 if [[ ${HOMESTOCK_SKIP_PULL:-0} != 1 ]]; then
-  "${compose[@]}" --profile tools pull
+  if [[ -n "$postgres_container" ]]; then
+    # An application release does not upgrade the existing database image.
+    "${compose[@]}" --profile tools pull auth-service auth-migrations gateway
+  else
+    "${compose[@]}" --profile tools pull
+  fi
 fi
 
+# Start the existing database with its current settings before taking a backup.
 "${compose[@]}" up -d --no-build --no-recreate --wait --wait-timeout 120 postgres
+postgres_container=$("${compose[@]}" ps --all --quiet postgres)
+postgres_image=$(docker inspect --format '{{.Image}}' "$postgres_container")
 
 umask 077
 mkdir -p "$deployment_home/backups"
@@ -43,6 +52,10 @@ backup_file="$deployment_home/backups/auth-$(date -u +%Y%m%dT%H%M%S)-$IMAGE_TAG.
 "${compose[@]}" exec -T postgres sh -c \
   'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip > "$backup_file.tmp"
 mv -- "$backup_file.tmp" "$backup_file"
+
+# Apply changed limits/settings while preserving the exact database image and data volume.
+# A changed configuration can briefly restart PostgreSQL; the backup already exists.
+POSTGRES_IMAGE="$postgres_image" "${compose[@]}" up -d --no-build --pull never --wait --wait-timeout 120 postgres
 
 "${compose[@]}" run --rm --no-deps auth-migrations up
 "${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 auth-service
