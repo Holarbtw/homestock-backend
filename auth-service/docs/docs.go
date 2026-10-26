@@ -12,6 +12,7 @@ const docTemplate = `{
         "contact": {},
         "version": "{{.Version}}"
     },
+    "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
         "/email": {
@@ -21,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Changes the email address of the authenticated user.",
+                "description": "Changes the email address of the authenticated user.\nPreserves the user ID and existing tokens. The password is checked when the normalized new email differs from the current one. Sending the current email returns the unchanged user without checking the password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -51,25 +52,31 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_EMAIL",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized or wrong password",
+                        "description": "UNAUTHORIZED, INVALID_TOKEN, INVALID_CREDENTIALS (wrong password or guest account)",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "409": {
-                        "description": "Email already in use",
+                        "description": "EMAIL_ALREADY_EXISTS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -79,7 +86,7 @@ const docTemplate = `{
         },
         "/guest-login": {
             "post": {
-                "description": "Creates an anonymous guest user account and returns an auth token pair.",
+                "description": "Creates an anonymous guest user account and returns an auth token pair.\nThe body may be omitted. Omitted or blank nickname defaults to \"Гость\"; timezone defaults to UTC. Guest user responses omit email instead of returning null.",
                 "consumes": [
                     "application/json"
                 ],
@@ -108,13 +115,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_NICKNAME, INVALID_TIMEZONE",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -129,7 +136,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Converts an active guest user account to a permanent registered account.",
+                "description": "Converts an active guest user account to a permanent registered account.\nPreserves the user ID and existing access and refresh tokens; no tokens are issued or revoked. Returns the updated user with is_guest=false and email. Update the cached profile and keep using the current tokens until normal expiry, rotation or revocation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -159,25 +166,31 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error or account already linked",
+                        "description": "INVALID_REQUEST, INVALID_EMAIL, INVALID_PASSWORD, GUEST_ALREADY_LINKED",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "409": {
-                        "description": "Email already in use",
+                        "description": "EMAIL_ALREADY_EXISTS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -187,7 +200,7 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returning an auth token pair.",
+                "description": "Authenticates a user with email and password, returning an auth token pair.\nA 401 INVALID_CREDENTIALS response means the credentials were rejected; refreshing an existing token does not resolve it.",
                 "consumes": [
                     "application/json"
                 ],
@@ -217,19 +230,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_EMAIL, INVALID_PASSWORD",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Invalid credentials",
+                        "description": "INVALID_CREDENTIALS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -239,7 +252,7 @@ const docTemplate = `{
         },
         "/logout": {
             "post": {
-                "description": "Revokes the specified refresh token session.",
+                "description": "Revokes the specified refresh token session.\nNo Authorization header is required. A non-empty unknown or already revoked token still returns 204. Missing or empty refresh_token returns 401 INVALID_TOKEN. Access tokens remain valid until their expiry.",
                 "consumes": [
                     "application/json"
                 ],
@@ -266,13 +279,19 @@ const docTemplate = `{
                         "description": "Successfully logged out"
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "INVALID_REQUEST",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "INVALID_TOKEN",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -287,7 +306,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Changes the password of the authenticated user and revokes other active sessions.",
+                "description": "Changes the password and revokes every refresh token belonging to the user, including the current session. No new tokens are returned; sign in again to obtain a new pair. Previously issued access tokens remain valid until expiry.",
                 "consumes": [
                     "application/json"
                 ],
@@ -314,19 +333,25 @@ const docTemplate = `{
                         "description": "Password updated successfully"
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_PASSWORD (new_password)",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized or wrong old password",
+                        "description": "UNAUTHORIZED, INVALID_TOKEN, INVALID_CREDENTIALS (wrong old password or guest account)",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -341,7 +366,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns the profile information of the authenticated user.",
+                "description": "Returns the profile information of the authenticated user.\nAll fields except email are always present. Email is omitted for a guest. Timestamps are RFC 3339 UTC (Z), independently of the profile time zone.",
                 "produces": [
                     "application/json"
                 ],
@@ -357,19 +382,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "404": {
-                        "description": "User not found",
+                        "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -382,7 +407,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates nickname and/or timezone for the authenticated user.",
+                "description": "Updates nickname and/or timezone for the authenticated user.\nOmitted, null, empty or whitespace-only fields keep their existing values. The time zone preference does not change the UTC timestamps returned by the API.",
                 "consumes": [
                     "application/json"
                 ],
@@ -412,19 +437,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_NICKNAME, INVALID_TIMEZONE",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -434,7 +465,7 @@ const docTemplate = `{
         },
         "/refresh": {
             "post": {
-                "description": "Refreshes the access token and returns a new rotated token pair.",
+                "description": "Refreshes the access token and returns a new rotated token pair.\nThe supplied refresh token is revoked on success. Store both returned tokens and serialize refresh attempts to avoid reusing an already rotated token. No Authorization header is required.",
                 "consumes": [
                     "application/json"
                 ],
@@ -464,19 +495,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "INVALID_REQUEST",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "401": {
-                        "description": "Invalid or revoked token",
+                        "description": "INVALID_TOKEN (missing, unknown or expired refresh token), SESSION_REVOKED (already revoked or rotated refresh token)",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -486,7 +517,7 @@ const docTemplate = `{
         },
         "/register": {
             "post": {
-                "description": "Creates a new user account and returns an auth token pair.",
+                "description": "Creates a new user account and returns an auth token pair.\nEmail, password and nickname are required. Omitted or blank timezone defaults to UTC. Response timestamps use RFC 3339 UTC (Z).",
                 "consumes": [
                     "application/json"
                 ],
@@ -516,19 +547,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Validation error",
+                        "description": "INVALID_REQUEST, INVALID_EMAIL, INVALID_PASSWORD, INVALID_NICKNAME, INVALID_TIMEZONE",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "409": {
-                        "description": "User with this email already exists",
+                        "description": "EMAIL_ALREADY_EXISTS",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "INTERNAL_SERVER_ERROR",
                         "schema": {
                             "$ref": "#/definitions/apperrors.CustomError"
                         }
@@ -540,23 +571,43 @@ const docTemplate = `{
     "definitions": {
         "apperrors.CustomError": {
             "type": "object",
+            "required": [
+                "code",
+                "message",
+                "status_code"
+            ],
             "properties": {
                 "code": {
-                    "type": "string"
+                    "description": "Stable machine-readable code. Clients should provide a fallback for unknown codes.",
+                    "type": "string",
+                    "example": "INVALID_REQUEST"
                 },
                 "message": {
-                    "type": "string"
+                    "description": "Diagnostic message. Client-facing localized messages should be selected by code.",
+                    "type": "string",
+                    "example": "Invalid request payload"
                 },
                 "status_code": {
-                    "type": "integer"
+                    "description": "HTTP response status, repeated in the body for convenience.",
+                    "type": "integer",
+                    "example": 400
                 }
             }
         },
         "internal_adapters_http.AuthResponse": {
             "type": "object",
+            "required": [
+                "access_expires_at",
+                "access_token",
+                "refresh_token",
+                "user"
+            ],
             "properties": {
                 "access_expires_at": {
-                    "type": "string"
+                    "description": "Access token expiry as an RFC 3339 timestamp in UTC (Z). Fractional seconds may be present.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-10-26T10:15:00Z"
                 },
                 "access_token": {
                     "type": "string",
@@ -573,26 +624,43 @@ const docTemplate = `{
         },
         "internal_adapters_http.ChangeEmailRequest": {
             "type": "object",
+            "required": [
+                "new_email",
+                "password"
+            ],
             "properties": {
                 "new_email": {
+                    "description": "New email address, trimmed and converted to lowercase; at most 255 UTF-8 bytes.",
                     "type": "string",
+                    "format": "email",
                     "example": "new_user@example.com"
                 },
                 "password": {
+                    "description": "Current password. Checked when the normalized email differs from the current email.",
                     "type": "string",
+                    "format": "password",
                     "example": "secret123"
                 }
             }
         },
         "internal_adapters_http.ChangePasswordRequest": {
             "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
             "properties": {
                 "new_password": {
+                    "description": "At least 8 Unicode code points and at most 72 UTF-8 bytes. Not trimmed.",
                     "type": "string",
+                    "format": "password",
+                    "minLength": 8,
                     "example": "newsecret123"
                 },
                 "old_password": {
+                    "description": "Current password, sent without trimming.",
                     "type": "string",
+                    "format": "password",
                     "example": "oldsecret123"
                 }
             }
@@ -601,76 +669,124 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "nickname": {
+                    "description": "Omitted, null, empty or whitespace-only values use \"Гость\"; otherwise 2 to 32 Unicode code points after trimming.",
                     "type": "string",
+                    "default": "Гость",
                     "example": "Гость"
                 },
                 "timezone": {
+                    "description": "IANA time zone. Omitted, null, empty or whitespace-only values use UTC.",
                     "type": "string",
+                    "default": "UTC",
                     "example": "UTC"
                 }
             }
         },
         "internal_adapters_http.LinkGuestRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
             "properties": {
                 "email": {
+                    "description": "Email address, trimmed and converted to lowercase; at most 255 UTF-8 bytes.",
                     "type": "string",
+                    "format": "email",
                     "example": "user@example.com"
                 },
                 "password": {
+                    "description": "At least 8 Unicode code points and at most 72 UTF-8 bytes. Not trimmed.",
                     "type": "string",
+                    "format": "password",
+                    "minLength": 8,
                     "example": "secret123"
                 }
             }
         },
         "internal_adapters_http.LoginRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
             "properties": {
                 "email": {
+                    "description": "Email address, trimmed and converted to lowercase.",
                     "type": "string",
+                    "format": "email",
                     "example": "user@example.com"
                 },
                 "password": {
+                    "description": "At least 8 Unicode code points and at most 72 UTF-8 bytes. Not trimmed.",
                     "type": "string",
+                    "format": "password",
+                    "minLength": 8,
                     "example": "secret123"
                 }
             }
         },
         "internal_adapters_http.RefreshTokenRequest": {
             "type": "object",
+            "required": [
+                "refresh_token"
+            ],
             "properties": {
                 "refresh_token": {
+                    "description": "Opaque refresh token from the last successful login or refresh. Missing or empty values produce INVALID_TOKEN (401).",
                     "type": "string",
+                    "minLength": 1,
                     "example": "d290f1ee6..."
                 }
             }
         },
         "internal_adapters_http.RegisterRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "nickname",
+                "password"
+            ],
             "properties": {
                 "email": {
+                    "description": "Email address, trimmed and converted to lowercase; at most 255 UTF-8 bytes.",
                     "type": "string",
+                    "format": "email",
                     "example": "user@example.com"
                 },
                 "nickname": {
+                    "description": "Between 2 and 32 Unicode code points after trimming surrounding whitespace.",
                     "type": "string",
                     "example": "Алексей"
                 },
                 "password": {
+                    "description": "At least 8 Unicode code points and at most 72 UTF-8 bytes. Not trimmed.",
                     "type": "string",
+                    "format": "password",
+                    "minLength": 8,
                     "example": "secret123"
                 },
                 "timezone": {
+                    "description": "IANA time zone. Omitted, null, empty or whitespace-only values use UTC.",
                     "type": "string",
+                    "default": "UTC",
                     "example": "Europe/Moscow"
                 }
             }
         },
         "internal_adapters_http.TokenResponse": {
             "type": "object",
+            "required": [
+                "access_expires_at",
+                "access_token",
+                "refresh_token"
+            ],
             "properties": {
                 "access_expires_at": {
-                    "type": "string"
+                    "description": "Access token expiry as an RFC 3339 timestamp in UTC (Z). Fractional seconds may be present.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-10-26T10:15:00Z"
                 },
                 "access_token": {
                     "type": "string",
@@ -686,10 +802,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "nickname": {
+                    "description": "Omitted, null, empty or whitespace-only values leave the nickname unchanged; otherwise 2 to 32 Unicode code points after trimming.",
                     "type": "string",
                     "example": "НовыйНик"
                 },
                 "timezone": {
+                    "description": "IANA time zone. Omitted, null, empty or whitespace-only values leave the time zone unchanged.",
                     "type": "string",
                     "example": "Europe/Moscow"
                 }
@@ -697,16 +815,30 @@ const docTemplate = `{
         },
         "internal_adapters_http.UserResponse": {
             "type": "object",
+            "required": [
+                "created_at",
+                "id",
+                "is_guest",
+                "nickname",
+                "timezone",
+                "updated_at"
+            ],
             "properties": {
                 "created_at": {
-                    "type": "string"
+                    "description": "RFC 3339 timestamp in UTC (Z). Fractional seconds may be present.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-10-26T10:00:00Z"
                 },
                 "email": {
+                    "description": "Omitted for guest accounts; a string for registered accounts. Never serialized as null.",
                     "type": "string",
+                    "format": "email",
                     "example": "user@example.com"
                 },
                 "id": {
                     "type": "string",
+                    "format": "uuid",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "is_guest": {
@@ -718,11 +850,15 @@ const docTemplate = `{
                     "example": "Алексей"
                 },
                 "timezone": {
+                    "description": "User's IANA time zone preference. Does not change the UTC timestamps in API responses.",
                     "type": "string",
                     "example": "Europe/Moscow"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "description": "RFC 3339 timestamp in UTC (Z). Fractional seconds may be present.",
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-10-26T10:00:00Z"
                 }
             }
         }
@@ -740,10 +876,11 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
+	Host:             "",
 	BasePath:         "/api/v1/auth",
 	Schemes:          []string{},
 	Title:            "Homestock Auth Service API",
-	Description:      "Authentication and user profile service for Homestock project.",
+	Description:      "### Authentication contract\n\nAll paths below are relative to `/api/v1/auth`. Send JSON request bodies with `Content-Type: application/json`.\n\nProtected operations require `Authorization: Bearer <access_token>`. Registration, login, guest login, refresh and logout do not require this header. Refresh and logout identify the session using `refresh_token` in the request body.\n\n### Dates and response fields\n\n`access_expires_at`, `created_at` and `updated_at` are RFC 3339 timestamps in UTC, ending in `Z`, for example `2026-10-25T10:00:00Z` or `2026-10-25T10:00:00.123456Z`. Fractional seconds are optional and may contain up to nine digits. The profile's `timezone` does not change these timestamps; it is a separate user preference.\n\n`required` means a JSON key must be present. It does not mean the key can contain `null`. An optional key may be absent; a nullable value may explicitly be `null`. These are different properties of the contract.\n\nSuccessful response objects always include the following keys with non-null values:\n\n| Response | Always present |\n| --- | --- |\n| `AuthResponse` | `access_token`, `refresh_token`, `access_expires_at`, `user` |\n| `TokenResponse` | `access_token`, `refresh_token`, `access_expires_at` |\n| `UserResponse` | `id`, `nickname`, `timezone`, `is_guest`, `created_at`, `updated_at` |\n\n`UserResponse.email` is a string when available. For a guest, the key is **omitted**, rather than sent as `null` or `\"\"`. Handle the absent key when decoding a guest profile. Responses with status `204` have no body.\n\nExample guest profile (the `user` object inside a guest-login response, or the body of `GET /profile`):\n\n```json\n{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"nickname\": \"Гость\",\n  \"timezone\": \"UTC\",\n  \"is_guest\": true,\n  \"created_at\": \"2026-10-26T10:00:00Z\",\n  \"updated_at\": \"2026-10-26T10:00:00Z\"\n}\n```\n\nAfter linking, the same profile ID is returned with `is_guest: false` and an `email` string. The other profile keys remain present.\n\n### Request fields and defaults\n\n| Operation | Input needed for the operation | Optional input and defaults |\n| --- | --- | --- |\n| `POST /register` | `email`, `password`, `nickname` | `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /login` | `email`, `password` | None |\n| `POST /guest-login` | None; the body may be absent | `nickname`: defaults to `Гость` when omitted or blank; `timezone`: defaults to `UTC` when omitted or blank |\n| `POST /refresh` | Nonempty `refresh_token` | None |\n| `POST /logout` | Nonempty `refresh_token` | None |\n| `POST /link-guest` | `email`, `password` | None |\n| `PATCH /password` | `old_password`, `new_password` | None |\n| `PATCH /email` | `new_email`, `password` for an actual change | Submitting the current normalized email is a no-op; the current implementation returns the profile before checking the password in this case |\n| `PATCH /profile` | A JSON body; no individual field is mandatory | Omitted or blank `nickname` and `timezone` keep their current values; `{}` is accepted |\n| `GET /profile` | No body | None |\n\nInput rules:\n\n- Email is trimmed, validated as an address without a display name and converted to lowercase. Its trimmed length must be at most 255 UTF-8 bytes.\n- A new password, or a password submitted to `/login`, must contain at least eight Unicode code points and at most 72 UTF-8 bytes. Passwords are not trimmed. Multibyte characters count towards the byte limit. The current password supplied to a password/email change is checked against the stored hash.\n- Nicknames are trimmed and must contain 2-32 Unicode code points after trimming. Guest login applies its default before this validation.\n- Timezones are trimmed and must be supported IANA timezone names, such as `Europe/Moscow`, or `UTC`. Registration and guest login use `UTC` for blank values. A blank timezone in `PATCH /profile` keeps the existing timezone.\n\nThe current JSON decoder does not independently enforce schema `required` fields. Missing string fields, and string fields set to JSON `null`, decode as empty strings; service validation or the defaults above then apply. A top-level `null` also decodes as an empty request. This does **not** provide a way to clear a field. Malformed JSON or a number/array/object supplied for a string field returns `400 INVALID_REQUEST`. Unknown JSON fields are currently ignored. Clients should send one JSON object and use the documented fields and types.\n\n### Error format\n\nErrors returned by the auth application's error handler have this shape:\n\n```json\n{\n  \"code\": \"EMAIL_ALREADY_EXISTS\",\n  \"status_code\": 409,\n  \"message\": \"User with this email already exists\"\n}\n```\n\nAll three keys are present. `status_code` matches the HTTP status. Internal causes and database details are not included in the JSON response.\n\nUse `code` to select a localized UI message or action. Do not compare the English `message` text. Handle an unknown code with a generic fallback based on the HTTP status. Router-generated, proxy-generated and panic-recovery responses can have another body format; the client must also handle an empty or non-JSON error body.\n\n| HTTP | Code | Meaning |\n| --- | --- | --- |\n| 400 | `INVALID_REQUEST` | The JSON request cannot be decoded, including a wrong value type or a body that exceeds the application's decoder limit |\n| 400 | `INVALID_EMAIL` | The email is missing or has an invalid format/length |\n| 400 | `INVALID_PASSWORD` | The submitted password does not meet the length rules |\n| 400 | `INVALID_NICKNAME` | The nickname does not meet the length rules |\n| 400 | `INVALID_TIMEZONE` | The timezone is not supported |\n| 400 | `GUEST_ALREADY_LINKED` | The account is already a permanent account |\n| 401 | `INVALID_CREDENTIALS` | Login credentials or the current password are incorrect; also returned when the account has no password |\n| 401 | `UNAUTHORIZED` | The Bearer authorization header is missing or malformed |\n| 401 | `INVALID_TOKEN` | The access token is invalid/expired, or the refresh token is missing, unknown or expired; see endpoint behavior below |\n| 401 | `SESSION_REVOKED` | The refresh token has already been revoked, including a token consumed by successful rotation |\n| 404 | `NOT_FOUND` | The requested user no longer exists or is deleted |\n| 409 | `EMAIL_ALREADY_EXISTS` | Another active account uses this email |\n| 400 | `VALIDATION_FAILED` | A database constraint rejected the data; a generic infrastructure fallback |\n| 409 | `CONFLICT` | A database uniqueness constraint rejected the write without a more specific mapping |\n| 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

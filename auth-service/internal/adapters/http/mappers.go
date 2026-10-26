@@ -11,7 +11,7 @@ func toUserResponse(u *domain.User) UserResponse {
 		Nickname:  u.Nickname,
 		Timezone:  u.Timezone,
 		IsGuest:   u.IsGuest,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+		CreatedAt: u.CreatedAt.UTC(),
+		UpdatedAt: u.UpdatedAt.UTC(),
 	}
 }
