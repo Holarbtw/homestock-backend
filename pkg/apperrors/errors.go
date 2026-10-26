@@ -13,10 +13,13 @@ type errorContextKey struct{}
 var errCtxKey = errorContextKey{}
 
 type CustomError struct {
-	Code       string `json:"code"`
-	StatusCode int    `json:"status_code"`
-	Msg        string `json:"message"`
-	Err        error  `json:"-"`
+	// Stable machine-readable code. Clients should provide a fallback for unknown codes.
+	Code string `json:"code" validate:"required" example:"INVALID_REQUEST"`
+	// HTTP response status, repeated in the body for convenience.
+	StatusCode int `json:"status_code" validate:"required" example:"400"`
+	// Diagnostic message. Client-facing localized messages should be selected by code.
+	Msg string `json:"message" validate:"required" example:"Invalid request payload"`
+	Err error  `json:"-"`
 }
 
 func (e *CustomError) Error() string {
