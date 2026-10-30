@@ -37,6 +37,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A fresh CI runner has only the application images built by the workflow.
+# Fetch PostgreSQL if missing before any startup that uses --pull never.
+"${compose[@]}" pull --policy missing postgres
+
 assert_limits() {
   local service=$1 memory=$2 swap=$3 shares=$4 container_id actual
   container_id=$("${compose[@]}" ps --quiet "$service")
