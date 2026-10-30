@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package catalog.v1;
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Holarbtw/homestock-backend/pkg/pb/catalog/v1;catalogv1";
+
+message GetProductRequest{
+    string gtin = 1;
+}
+
+message GetProductResponse{
+    Product product = 1;
+}
+
+service CatalogService{
+    rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+}
+
+message Product{
+    string id = 1;
+    string gtin = 2;
+    string name = 3;
+    optional string brand = 4;
+    optional string category = 5;
+    PackageSize package_size = 6;
+    optional string image_url = 7;
+    google.protobuf.Timestamp created_at = 8;
+    google.protobuf.Timestamp updated_at = 9;
+}
+
+message PackageSize{
+    string quantity = 1;
+    Unit unit = 2;
+}
+
+enum Unit{
+    UNIT_UNSPECIFIED = 0;
+    UNIT_MILLILITER = 1;
+    UNIT_GRAM = 2;
+    UNIT_PIECE = 3;
+}
