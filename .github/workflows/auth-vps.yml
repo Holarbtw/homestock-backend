@@ -1,20 +1,28 @@
-name: Auth VPS
+name: Backend VPS
 
 on:
   push:
     branches: [main]
     paths:
       - auth-service/**
+      - catalog-service/**
       - pkg/**
+      - proto/**
       - deploy/**
+      - go.work
+      - go.work.sum
       - .dockerignore
       - .gitattributes
       - .github/workflows/auth-vps.yml
   pull_request:
     paths:
       - auth-service/**
+      - catalog-service/**
       - pkg/**
+      - proto/**
       - deploy/**
+      - go.work
+      - go.work.sum
       - .dockerignore
       - .gitattributes
       - .github/workflows/auth-vps.yml
@@ -46,11 +54,13 @@ jobs:
           go-version-file: auth-service/go.mod
           cache-dependency-path: |
             auth-service/go.sum
+            catalog-service/go.sum
             pkg/go.sum
       - name: Check Go packages
         run: |
           (cd pkg && go test ./...)
           (cd auth-service && go test ./...)
+          (cd catalog-service && go test ./...)
       - name: Check deployment scripts
         run: |
           for script in deploy/vps/*.sh deploy/test-deployment.sh; do bash -n "$script"; done
@@ -94,6 +104,28 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
+      - name: Build catalog image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: catalog-service/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/catalog-service:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=catalog
+          cache-to: type=gha,mode=max,scope=catalog
+      - name: Build catalog migrations image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/catalog-migrations.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/catalog-migrations:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=catalog-migrations
+          cache-to: type=gha,mode=max,scope=catalog-migrations
       - name: Check registration and refresh limits
         env:
           IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
@@ -119,6 +151,8 @@ jobs:
         run: |
           docker push "$IMAGE_PREFIX/auth-service:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/auth-migrations:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/catalog-service:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/catalog-migrations:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/gateway:$IMAGE_TAG"
           echo "Published release: $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
 
@@ -160,7 +194,7 @@ jobs:
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$remote_dir'"
           scp -P "$VPS_PORT" "$RUNNER_TEMP/release.tar.gz" "$VPS_USER@$VPS_HOST:$remote_dir/release.tar.gz"
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "tar -xzf '$remote_dir/release.tar.gz' -C '$remote_dir'"
-      - name: Pull images, back up the database, migrate and deploy
+      - name: Pull images, back up databases, migrate and deploy
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
