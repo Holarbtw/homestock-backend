@@ -81,6 +81,48 @@ services:
         condition: service_healthy
     logging: *logging
 
+  catalog-service:
+    image: ${IMAGE_PREFIX:?Set IMAGE_PREFIX}/catalog-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    mem_limit: 128m
+    memswap_limit: 192m
+    cpu_shares: 1024
+    init: true
+    environment:
+      GOMEMLIMIT: 96MiB
+      CATALOG_SERVICE_PORT: ${CATALOG_SERVICE_PORT:-9090}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-homestock}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME:-homestock_catalog}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/catalog-service", "-healthcheck"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 15s
+    logging: *logging
+
+  catalog-migrations:
+    image: ${IMAGE_PREFIX:?Set IMAGE_PREFIX}/catalog-migrations:${IMAGE_TAG:?Set IMAGE_TAG}
+    profiles: ["tools"]
+    restart: "no"
+    mem_limit: 128m
+    memswap_limit: 192m
+    cpu_shares: 256
+    environment:
+      GOMEMLIMIT: 96MiB
+      GOOSE_DBSTRING: "host=postgres port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:?Set DB_PASSWORD} dbname=${CATALOG_DB_NAME:-homestock_catalog} sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     restart: unless-stopped
@@ -92,7 +134,7 @@ services:
       - -c
       - shared_buffers=128MB
       - -c
-      - max_connections=30
+      - max_connections=60
       - -c
       - work_mem=4MB
       - -c
@@ -105,6 +147,7 @@ services:
       POSTGRES_USER: ${DB_USER:-homestock}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       POSTGRES_DB: ${AUTH_DB_NAME:-homestock_auth}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME:-homestock_catalog}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

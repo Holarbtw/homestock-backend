@@ -66,18 +66,27 @@ services:
       dockerfile: catalog-service/Dockerfile
     container_name: homestock-catalog-service
     restart: "no"
+    stop_grace_period: 15s
+    ports:
+      - "127.0.0.1:${CATALOG_SERVICE_PORT:-9090}:${CATALOG_SERVICE_PORT:-9090}"
     environment:
-      - PORT=${CATALOG_SERVICE_PORT:-9090}
+      - CATALOG_SERVICE_PORT=${CATALOG_SERVICE_PORT:-9090}
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=5432
       - DB_USER=${DB_USER:-homestock}
       - DB_PASSWORD=${DB_PASSWORD:-homestock_secret}
-      - DB_NAME=${CATALOG_DB_NAME:-homestock_catalog}
+      - CATALOG_DB_NAME=${CATALOG_DB_NAME:-homestock_catalog}
     depends_on:
       postgres:
         condition: service_healthy
       catalog-migrations:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/catalog-service", "-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 6
     networks:
       - homestock-network
 

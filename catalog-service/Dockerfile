@@ -8,7 +8,7 @@ COPY catalog-service ./catalog-service
 WORKDIR /app/catalog-service
 
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o /catalog-service ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /catalog-service ./cmd
 
 FROM alpine:3.23
 
