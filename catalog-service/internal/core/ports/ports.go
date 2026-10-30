@@ -23,3 +23,7 @@ type NegativeLookupCacheRepository interface {
 
 	Upsert(ctx context.Context, gtin, provider string, checkedAt, expiresAt time.Time) error
 }
+
+type CatalogService interface {
+	GetProduct(ctx context.Context, gtin string) (*domain.Product, error)
+}
