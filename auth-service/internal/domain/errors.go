@@ -22,7 +22,13 @@ var (
 	ErrSessionRevoked = &apperrors.CustomError{
 		Code:       "SESSION_REVOKED",
 		StatusCode: http.StatusUnauthorized,
-		Msg:        "Session has been revoked or expired",
+		Msg:        "Session has been revoked",
+	}
+
+	ErrRefreshTokenExpired = &apperrors.CustomError{
+		Code:       "REFRESH_TOKEN_EXPIRED",
+		StatusCode: http.StatusUnauthorized,
+		Msg:        "Refresh token has expired",
 	}
 
 	ErrGuestAlreadyLinked = &apperrors.CustomError{
