@@ -209,7 +209,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 			return domain.ErrSessionRevoked
 		}
 		if !time.Now().Before(token.ExpiresAt) {
-			return apperrors.ErrInvalidToken
+			return domain.ErrRefreshTokenExpired
 		}
 
 		txErr = s.userRepo.RevokeRefreshToken(txCtx, tokenHash)

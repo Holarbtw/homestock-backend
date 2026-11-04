@@ -135,13 +135,14 @@ func (h *AuthHandler) LoginGuest(w http.ResponseWriter, r *http.Request) {
 // @Summary Refresh token pair
 // @Description Refreshes the access token and returns a new rotated token pair.
 // @Description The supplied refresh token is revoked on success. Store both returned tokens and serialize refresh attempts to avoid reusing an already rotated token. No Authorization header is required.
+// @Description Returns 401 INVALID_TOKEN for a missing or unknown refresh token, REFRESH_TOKEN_EXPIRED for an expired token, and SESSION_REVOKED for an already revoked or rotated token. Revocation is checked before expiration.
 // @Tags Auth
 // @Accept json
 // @Produce json
 // @Param input body RefreshTokenRequest true "Refresh token input"
 // @Success 200 {object} TokenResponse
 // @Failure 400 {object} apperrors.CustomError "INVALID_REQUEST"
-// @Failure 401 {object} apperrors.CustomError "INVALID_TOKEN (missing, unknown or expired refresh token), SESSION_REVOKED (already revoked or rotated refresh token)"
+// @Failure 401 {object} apperrors.CustomError "INVALID_TOKEN (missing or unknown refresh token), REFRESH_TOKEN_EXPIRED (expired refresh token), SESSION_REVOKED (already revoked or rotated refresh token)"
 // @Failure 429 {string} string "Gateway rate limit exceeded; the body may be empty or plain text, not CustomError"
 // @Header 429 {integer} Retry-After "Seconds to wait before retrying; the current refresh token was not consumed"
 // @Failure 500 {object} apperrors.CustomError "INTERNAL_SERVER_ERROR"

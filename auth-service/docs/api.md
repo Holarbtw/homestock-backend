@@ -108,10 +108,22 @@ Use `code` to select a localized UI message or action. Do not compare the Englis
 | 400 | `GUEST_ALREADY_LINKED` | The account is already a permanent account |
 | 401 | `INVALID_CREDENTIALS` | Login credentials or the current password are incorrect; also returned when the account has no password |
 | 401 | `UNAUTHORIZED` | The Bearer authorization header is missing or malformed |
-| 401 | `INVALID_TOKEN` | The access token is invalid/expired, or the refresh token is missing, unknown or expired; see endpoint behavior below |
+| 401 | `INVALID_TOKEN` | The access token is invalid or expired; for refresh, the token is missing or unknown |
+| 401 | `REFRESH_TOKEN_EXPIRED` | The refresh token was found, has not been revoked, and its expiration time has been reached |
 | 401 | `SESSION_REVOKED` | The refresh token has already been revoked, including a token consumed by successful rotation |
 | 404 | `NOT_FOUND` | The requested user no longer exists or is deleted |
 | 409 | `EMAIL_ALREADY_EXISTS` | Another active account uses this email |
 | 400 | `VALIDATION_FAILED` | A database constraint rejected the data; a generic infrastructure fallback |
 | 409 | `CONFLICT` | A database uniqueness constraint rejected the write without a more specific mapping |
 | 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |
+
+### Refresh errors
+
+`POST /refresh` distinguishes three authentication failures, all with HTTP `401`:
+
+- `INVALID_TOKEN`: `refresh_token` is empty or missing, or its hash is not found in the database.
+- `SESSION_REVOKED`: the refresh token has already been revoked, including by a successful refresh rotation.
+- `REFRESH_TOKEN_EXPIRED`: the refresh token exists, has not been revoked, and the current time is at or after `expires_at`.
+
+Revocation is checked before expiration. A token that is both revoked and expired returns `SESSION_REVOKED`.
+An expired access token used for a protected endpoint still produces `INVALID_TOKEN`.
