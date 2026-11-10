@@ -25,11 +25,13 @@ type AddBatchRequest struct {
 	ExpiresOn   *string `json:"expires_on,omitempty" format:"date" example:"2026-11-15"`
 }
 
-type ConsumeRequest struct {
+type DecreaseItemRequest struct {
+	Type     string `json:"type" validate:"required" enums:"CONSUME,WRITE_OFF" example:"CONSUME"`
 	Quantity string `json:"quantity" validate:"required" example:"250.000"`
 }
 
-type WriteOffRequest struct {
+type DecreaseBatchRequest struct {
+	Type     string `json:"type" validate:"required" enums:"CONSUME,WRITE_OFF" example:"WRITE_OFF"`
 	Quantity string `json:"quantity" validate:"required" example:"100.000"`
 }
 
