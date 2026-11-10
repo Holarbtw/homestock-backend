@@ -53,10 +53,11 @@ type InventoryItem struct {
 	ImageObjectKey   *string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	DeletedAt        *time.Time
 }
 
 func (i *InventoryItem) IsLowStock(total quantity.Quantity) bool {
-	return i.MinimumQuantity != nil && total.Thousandths() <= i.MinimumQuantity.Thousandths()
+	return i.DeletedAt == nil && i.MinimumQuantity != nil && total.Thousandths() <= i.MinimumQuantity.Thousandths()
 }
 
 type Batch struct {

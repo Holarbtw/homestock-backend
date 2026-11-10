@@ -78,12 +78,12 @@ type StockOperationLineResponse struct {
 }
 
 type ItemDetailsResponse struct {
-	Item ItemResponse `json:"item" validate:"required"`
+	Item    ItemResponse    `json:"item" validate:"required"`
 	Batches []BatchResponse `json:"batches" validate:"required"`
 }
 
 type StockChangeResponse struct {
-	Item ItemResponse `json:"item" validate:"required"`
+	Item      ItemResponse           `json:"item" validate:"required"`
 	Batches   []BatchResponse        `json:"batches" validate:"required"`
 	Operation StockOperationResponse `json:"operation" validate:"required"`
 }
