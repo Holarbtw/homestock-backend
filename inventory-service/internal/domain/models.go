@@ -24,12 +24,12 @@ const (
 	Pcs        Unit = "pcs"
 )
 
-type OperationType string
+type StockOperationType string
 
 const (
-	Replenish OperationType = "REPLENISH"
-	Consume   OperationType = "CONSUME"
-	WriteOff  OperationType = "WRITE_OFF"
+	Replenish StockOperationType = "REPLENISH"
+	Consume   StockOperationType = "CONSUME"
+	WriteOff  StockOperationType = "WRITE_OFF"
 )
 
 type Space struct {
@@ -75,7 +75,7 @@ type StockOperation struct {
 	SpaceID     uuid.UUID
 	ItemID      uuid.UUID
 	ActorUserID uuid.UUID
-	Type        OperationType
+	Type        StockOperationType
 	Quantity    quantity.Quantity
 	OccurredAt  time.Time
 	Lines       []StockOperationLine
