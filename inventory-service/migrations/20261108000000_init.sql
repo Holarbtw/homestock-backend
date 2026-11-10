@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS spaces (
     image_object_key TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
 
     CONSTRAINT pk_inventory_items PRIMARY KEY (id),
     CONSTRAINT uq_inventory_items_space_id UNIQUE (space_id, id),
@@ -137,20 +138,7 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     )
 );
 
-CREATE TABLE IF NOT EXISTS guest_imports (
-    target_space_id UUID PRIMARY KEY REFERENCES spaces(id),
-    source_space_id UUID NOT NULL,
-    snapshot_hash BYTEA NOT NULL,
-    result JSONB NOT NULL,
-    imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-    CONSTRAINT chk_guest_imports_source_space CHECK (source_space_id <> target_space_id),
-    CONSTRAINT chk_guest_imports_snapshot_hash CHECK (octet_length(snapshot_hash) = 32),
-    CONSTRAINT chk_guest_imports_result CHECK (jsonb_typeof(result) = 'object')
-);
-
 -- +goose Down
-DROP TABLE IF EXISTS guest_imports;
 DROP TABLE IF EXISTS idempotency_records;
 DROP TABLE IF EXISTS stock_operation_lines;
 DROP TABLE IF EXISTS stock_operations;
