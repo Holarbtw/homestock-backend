@@ -6,11 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 )
 
 type errorContextKey struct{}
 
 var errCtxKey = errorContextKey{}
+
+type FieldError struct {
+	Field string `json:"field"`
+	Code  string `json:"code"`
+}
 
 type CustomError struct {
 	// Stable machine-readable code. Clients should provide a fallback for unknown codes.
@@ -19,7 +25,9 @@ type CustomError struct {
 	StatusCode int `json:"status_code" validate:"required" example:"400"`
 	// Diagnostic message. Client-facing localized messages should be selected by code.
 	Msg string `json:"message" validate:"required" example:"Invalid request payload"`
-	Err error  `json:"-"`
+	// Optional validation details, addressed by request field name and stable code.
+	Fields []FieldError `json:"fields,omitempty"`
+	Err    error        `json:"-"`
 }
 
 func (e *CustomError) Error() string {
@@ -38,7 +46,18 @@ func (e *CustomError) WithInternal(err error) *CustomError {
 		Code:       e.Code,
 		StatusCode: e.StatusCode,
 		Msg:        e.Msg,
+		Fields:     slices.Clone(e.Fields),
 		Err:        err,
+	}
+}
+
+func (e *CustomError) WithFields(fields []FieldError) *CustomError {
+	return &CustomError{
+		Code:       e.Code,
+		StatusCode: e.StatusCode,
+		Msg:        e.Msg,
+		Fields:     slices.Clone(fields),
+		Err:        e.Err,
 	}
 }
 

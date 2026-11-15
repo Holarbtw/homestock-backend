@@ -7,7 +7,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/Holarbtw/homestock-backend/inventory-service/internal/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 	"github.com/Holarbtw/homestock-backend/pkg/quantity"
 	"github.com/google/uuid"
@@ -17,11 +18,11 @@ func TestSerializeCreateItem(t *testing.T) {
 	brand, gtin := "Бренд", "04600634855338"
 	catalogID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	packageQuantity := inputQuantity(t, "930")
-	input := &CreateItemInput{
+	input := &ports.CreateItemInput{
 		Name: "Молоко", Brand: &brand, GTIN: &gtin, CatalogProductID: &catalogID,
 		Category: domain.Food, Unit: domain.Milliliter, PackageQuantity: &packageQuantity,
 		ExternalImageURL: &url.URL{Scheme: "https", Host: "example.test", Path: "/milk.jpg"},
-		FirstBatch: &InitialBatchInput{
+		FirstBatch: &ports.InitialBatchInput{
 			Quantity:    inputQuantity(t, "1860"),
 			PurchasedOn: inputDate(t, "2026-11-07"), ExpiresOn: inputDate(t, "2026-11-15"),
 		},
@@ -62,7 +63,7 @@ func TestSerializeCreateItem(t *testing.T) {
 func TestSerializeAddBatch(t *testing.T) {
 	itemID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
 	for _, withDates := range []bool{false, true} {
-		input := &AddBatchInput{ItemID: itemID, Quantity: inputQuantity(t, "1.5")}
+		input := &ports.AddBatchInput{ItemID: itemID, Quantity: inputQuantity(t, "1.5")}
 		if withDates {
 			input.PurchasedOn, input.ExpiresOn = inputDate(t, "2026-11-07"), inputDate(t, "2026-11-15")
 		}
@@ -77,19 +78,19 @@ func TestSerializeAddBatch(t *testing.T) {
 }
 
 func TestSerializeAddBatchReflectsChangedInput(t *testing.T) {
-	base := AddBatchInput{
+	base := ports.AddBatchInput{
 		ItemID: uuid.MustParse("00000000-0000-0000-0000-000000000002"), Quantity: inputQuantity(t, "1"),
 		PurchasedOn: inputDate(t, "2026-11-07"), ExpiresOn: inputDate(t, "2026-11-15"),
 	}
 	original := serializedInput(t, &base, CommandAddBatch).Bytes
 	for _, tt := range []struct {
 		name   string
-		change func(*AddBatchInput)
+		change func(*ports.AddBatchInput)
 	}{
-		{"item", func(v *AddBatchInput) { v.ItemID = uuid.MustParse("00000000-0000-0000-0000-000000000003") }},
-		{"quantity", func(v *AddBatchInput) { v.Quantity = inputQuantity(t, "2") }},
-		{"purchase date", func(v *AddBatchInput) { v.PurchasedOn = inputDate(t, "2026-11-08") }},
-		{"expiry date", func(v *AddBatchInput) { v.ExpiresOn = inputDate(t, "2026-11-16") }},
+		{"item", func(v *ports.AddBatchInput) { v.ItemID = uuid.MustParse("00000000-0000-0000-0000-000000000003") }},
+		{"quantity", func(v *ports.AddBatchInput) { v.Quantity = inputQuantity(t, "2") }},
+		{"purchase date", func(v *ports.AddBatchInput) { v.PurchasedOn = inputDate(t, "2026-11-08") }},
+		{"expiry date", func(v *ports.AddBatchInput) { v.ExpiresOn = inputDate(t, "2026-11-16") }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			changed := base
@@ -117,10 +118,10 @@ func TestSerializeDecreaseInputs(t *testing.T) {
 		build   func(uuid.UUID, uuid.UUID, domain.StockOperationType, quantity.Quantity) any
 	}{
 		{"item", CommandDecreaseItem, func(itemID, batchID uuid.UUID, reason domain.StockOperationType, amount quantity.Quantity) any {
-			return &DecreaseItemInput{ItemID: itemID, Type: reason, Quantity: amount}
+			return &ports.DecreaseItemInput{ItemID: itemID, Type: reason, Quantity: amount}
 		}},
 		{"batch", CommandDecreaseBatch, func(itemID, batchID uuid.UUID, reason domain.StockOperationType, amount quantity.Quantity) any {
-			return &DecreaseBatchInput{ItemID: itemID, BatchID: batchID, Type: reason, Quantity: amount}
+			return &ports.DecreaseBatchInput{ItemID: itemID, BatchID: batchID, Type: reason, Quantity: amount}
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,13 +172,13 @@ func TestSerializeInvalidInput(t *testing.T) {
 		name  string
 		input any
 	}{
-		{"nil create", (*CreateItemInput)(nil)},
-		{"nil add batch", (*AddBatchInput)(nil)},
-		{"nil decrease item", (*DecreaseItemInput)(nil)},
-		{"nil decrease batch", (*DecreaseBatchInput)(nil)},
+		{"nil create", (*ports.CreateItemInput)(nil)},
+		{"nil add batch", (*ports.AddBatchInput)(nil)},
+		{"nil decrease item", (*ports.DecreaseItemInput)(nil)},
+		{"nil decrease batch", (*ports.DecreaseBatchInput)(nil)},
 		{"nil interface", nil},
 		{"unsupported", "not an input"},
-		{"standalone initial batch", &InitialBatchInput{}},
+		{"standalone initial batch", &ports.InitialBatchInput{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			envelope, err := serializeCommand(tt.input)

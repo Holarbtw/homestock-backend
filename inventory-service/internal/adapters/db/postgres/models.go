@@ -6,6 +6,21 @@ import (
 	"github.com/google/uuid"
 )
 
+type spaceDB struct {
+	ID          uuid.UUID `db:"id"`
+	OwnerUserID uuid.UUID `db:"owner_user_id"`
+	CreatedAt   time.Time `db:"created_at"`
+}
+
+type idempotencyRecordDB struct {
+	SpaceID     uuid.UUID `db:"space_id"`
+	RequestKey  string    `db:"request_key"`
+	CommandType string    `db:"command_type"`
+	RequestHash []byte    `db:"request_hash"`
+	ResultData  []byte    `db:"result_data"`
+	CreatedAt   time.Time `db:"created_at"`
+}
+
 type itemDB struct {
 	ID               uuid.UUID  `db:"id"`
 	SpaceID          uuid.UUID  `db:"space_id"`

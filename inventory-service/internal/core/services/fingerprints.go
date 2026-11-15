@@ -3,7 +3,7 @@ package services
 import (
 	"crypto/sha256"
 
-	"github.com/Holarbtw/homestock-backend/inventory-service/internal/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
 )
 
 type fingerprintEnvelope struct {

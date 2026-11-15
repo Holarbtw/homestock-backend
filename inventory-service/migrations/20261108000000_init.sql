@@ -120,8 +120,7 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     request_key TEXT NOT NULL,
     command_type TEXT NOT NULL,
     request_hash BYTEA NOT NULL,
-    response_status SMALLINT,
-    response_body BYTEA,
+    result_data BYTEA,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_idempotency_records PRIMARY KEY (space_id, request_key),
@@ -129,13 +128,7 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
         btrim(request_key) <> '' AND octet_length(request_key) <= 200
     ),
     CONSTRAINT chk_idempotency_records_command_type CHECK (btrim(command_type) <> ''),
-    CONSTRAINT chk_idempotency_records_request_hash CHECK (octet_length(request_hash) = 32),
-    CONSTRAINT chk_idempotency_records_response_pair CHECK (
-        (response_status IS NULL) = (response_body IS NULL)
-    ),
-    CONSTRAINT chk_idempotency_records_response_status CHECK (
-        response_status BETWEEN 200 AND 299
-    )
+    CONSTRAINT chk_idempotency_records_request_hash CHECK (octet_length(request_hash) = 32)
 );
 
 -- +goose Down
