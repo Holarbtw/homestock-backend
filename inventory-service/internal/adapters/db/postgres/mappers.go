@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/Holarbtw/homestock-backend/inventory-service/internal/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 	"github.com/Holarbtw/homestock-backend/pkg/quantity"
 )

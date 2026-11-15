@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/Holarbtw/homestock-backend/inventory-service/internal/domain"
-	"github.com/Holarbtw/homestock-backend/inventory-service/internal/ports"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 	pkgPostgres "github.com/Holarbtw/homestock-backend/pkg/postgres"
 	"github.com/google/uuid"

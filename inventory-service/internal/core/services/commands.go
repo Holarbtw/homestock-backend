@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 )
 
@@ -21,7 +22,7 @@ const (
 func serializeCommand(value any) (*fingerprintEnvelope, error) {
 	var data fingerprintEnvelope
 	switch input := value.(type) {
-	case *CreateItemInput:
+	case *ports.CreateItemInput:
 		if input == nil {
 			return nil, apperrors.ErrInternalServer.WithInternal(
 				fmt.Errorf("nil value passed in serializeCommand"),
@@ -73,7 +74,7 @@ func serializeCommand(value any) (*fingerprintEnvelope, error) {
 		}
 
 		data = fingerprintEnvelope{Bytes: bytes, Command: CommandCreateItem}
-	case *AddBatchInput:
+	case *ports.AddBatchInput:
 		if input == nil {
 			return nil, apperrors.ErrInternalServer.WithInternal(
 				fmt.Errorf("nil value passed in serializeCommand"),
@@ -98,7 +99,7 @@ func serializeCommand(value any) (*fingerprintEnvelope, error) {
 		}
 
 		data = fingerprintEnvelope{Bytes: bytes, Command: CommandAddBatch}
-	case *DecreaseItemInput:
+	case *ports.DecreaseItemInput:
 		if input == nil {
 			return nil, apperrors.ErrInternalServer.WithInternal(
 				fmt.Errorf("nil value passed in serializeCommand"),
@@ -116,7 +117,7 @@ func serializeCommand(value any) (*fingerprintEnvelope, error) {
 		}
 
 		data = fingerprintEnvelope{Bytes: bytes, Command: CommandDecreaseItem}
-	case *DecreaseBatchInput:
+	case *ports.DecreaseBatchInput:
 		if input == nil {
 			return nil, apperrors.ErrInternalServer.WithInternal(
 				fmt.Errorf("nil value passed in serializeCommand"),
@@ -144,6 +145,6 @@ func serializeCommand(value any) (*fingerprintEnvelope, error) {
 	return &data, nil
 }
 
-func hashFingerprint(data []byte) [sha256.Size]byte{
+func hashFingerprint(data []byte) [sha256.Size]byte {
 	return sha256.Sum256(data)
 }
