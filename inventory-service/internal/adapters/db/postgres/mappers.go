@@ -1,13 +1,53 @@
 package postgres
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"net/url"
 
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 	"github.com/Holarbtw/homestock-backend/pkg/quantity"
 )
+
+func toIdempotencyRecord(record *idempotencyRecordDB) (*ports.IdempotencyRecord, error) {
+	if record == nil {
+		return nil, nil
+	}
+	if len(record.RequestHash) != sha256.Size {
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("persisted idempotency hash has length %d, expected %d", len(record.RequestHash), sha256.Size),
+		)
+	}
+
+	result := ports.IdempotencyRecord{
+		SpaceID:     record.SpaceID,
+		RequestKey:  record.RequestKey,
+		CommandType: record.CommandType,
+		CreatedAt:   record.CreatedAt,
+	}
+	copy(result.RequestHash[:], record.RequestHash)
+	if record.ResultData != nil {
+		result.Result = &ports.IdempotencyResult{
+			Data: bytes.Clone(record.ResultData),
+		}
+	}
+
+	return &result, nil
+}
+
+func toDomainSpace(record *spaceDB) *domain.Space {
+	if record == nil {
+		return nil
+	}
+	return &domain.Space{
+		ID:          record.ID,
+		OwnerUserID: record.OwnerUserID,
+		CreatedAt:   record.CreatedAt,
+	}
+}
 
 func toDomainItem(record *itemDB) (*domain.InventoryItem, error) {
 	if record == nil {
