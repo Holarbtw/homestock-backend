@@ -24,7 +24,7 @@ type ItemRepository interface {
 
 	GetByIDForUpdate(ctx context.Context, spaceID, itemID uuid.UUID) (*domain.InventoryItem, error)
 
-	ListBySpace(ctx context.Context, spaceID uuid.UUID, limit, offset int) ([]domain.InventoryItem, error)
+	ListBySpace(ctx context.Context, spaceID uuid.UUID, limit, offset int) ([]domain.ItemStock, error)
 
 	Update(ctx context.Context, spaceID, itemID uuid.UUID, params UpdateItemParams) (*domain.InventoryItem, error)
 
@@ -32,8 +32,16 @@ type ItemRepository interface {
 }
 
 type BatchRepository interface {
+	// Create returns the batch with its database-generated ID and addition time.
+	Create(ctx context.Context, batch domain.Batch) (*domain.Batch, error)
+	ListByItem(ctx context.Context, spaceID, itemID uuid.UUID) ([]domain.Batch, error)
 	// GetTotalQuantity includes expired batches; the service checks item access and active state.
 	GetTotalQuantity(ctx context.Context, spaceID, itemID uuid.UUID) (quantity.Quantity, error)
+}
+
+type StockOperationRepository interface {
+	// CreateReplenishment records a newly created batch and its initial quantity in the caller's transaction.
+	CreateReplenishment(ctx context.Context, batch *domain.Batch, actorUserID uuid.UUID) (*domain.StockOperation, error)
 }
 
 type IdempotencyRepository interface {

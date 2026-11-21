@@ -11,7 +11,7 @@ import (
 
 func validateItemCategory(category string) (domain.Category, error) {
 	trimmed := strings.TrimSpace(category)
-	switch trimmed{
+	switch trimmed {
 	case string(domain.Food):
 		return domain.Food, nil
 	case string(domain.Household):
@@ -23,26 +23,26 @@ func validateItemCategory(category string) (domain.Category, error) {
 	}
 }
 
-func validateItemName(name string) (string, error){
+func validateItemName(name string) (string, error) {
 	trimmed := strings.TrimSpace(name)
-	if trimmed == ""{
+	if trimmed == "" || strings.ContainsRune(trimmed, '\x00') {
 		return "", domain.ErrInvalidItemName
 	}
 
-	if utf8.RuneCountInString(trimmed) > domain.MaxItemNameLength{
+	if utf8.RuneCountInString(trimmed) > domain.MaxItemNameLength {
 		return "", domain.ErrItemNameTooLong
 	}
 
 	return trimmed, nil
 }
 
-func validateItemBrand(brand string) (string, error){
+func validateItemBrand(brand string) (string, error) {
 	trimmed := strings.TrimSpace(brand)
-	if trimmed == ""{
+	if trimmed == "" || strings.ContainsRune(trimmed, '\x00') {
 		return "", domain.ErrInvalidItemBrand
 	}
 
-	if utf8.RuneCountInString(trimmed) > domain.MaxItemBrandLength{
+	if utf8.RuneCountInString(trimmed) > domain.MaxItemBrandLength {
 		return "", domain.ErrItemBrandTooLong
 	}
 
@@ -53,8 +53,8 @@ func appendFieldError(
 	fields []apperrors.FieldError,
 	field string,
 	err error,
-) ([]apperrors.FieldError, error){
-	if err == nil{
+) ([]apperrors.FieldError, error) {
+	if err == nil {
 		return fields, nil
 	}
 
@@ -65,7 +65,7 @@ func appendFieldError(
 
 	fields = append(fields, apperrors.FieldError{
 		Field: field,
-		Code: customErr.Code,
+		Code:  customErr.Code,
 	})
 
 	return fields, nil

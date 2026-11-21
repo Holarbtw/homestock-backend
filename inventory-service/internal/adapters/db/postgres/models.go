@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type spaceDB struct {
@@ -37,4 +38,29 @@ type itemDB struct {
 	CreatedAt        time.Time  `db:"created_at"`
 	UpdatedAt        time.Time  `db:"updated_at"`
 	DeletedAt        *time.Time `db:"deleted_at"`
+}
+
+type itemStockDB struct {
+	itemDB
+	TotalQuantity string `db:"total_quantity"`
+}
+
+type batchDB struct {
+	ID                uuid.UUID   `db:"id"`
+	SpaceID           uuid.UUID   `db:"space_id"`
+	ItemID            uuid.UUID   `db:"item_id"`
+	RemainingQuantity string      `db:"remaining_quantity"`
+	PurchasedOn       pgtype.Date `db:"purchased_on"`
+	AddedAt           time.Time   `db:"added_at"`
+	ExpiresOn         pgtype.Date `db:"expires_on"`
+}
+
+type stockOperationDB struct {
+	ID          uuid.UUID `db:"id"`
+	SpaceID     uuid.UUID `db:"space_id"`
+	ItemID      uuid.UUID `db:"item_id"`
+	ActorUserID uuid.UUID `db:"actor_user_id"`
+	Type        string    `db:"type"`
+	Quantity    string    `db:"quantity"`
+	OccurredAt  time.Time `db:"occurred_at"`
 }

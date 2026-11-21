@@ -103,13 +103,24 @@ func (r *ItemRepository) GetByIDForUpdate(ctx context.Context, spaceID, itemID u
 	return toDomainItem(&record)
 }
 
-func (r *ItemRepository) ListBySpace(ctx context.Context, spaceID uuid.UUID, limit, offset int) ([]domain.InventoryItem, error) {
+func (r *ItemRepository) ListBySpace(ctx context.Context, spaceID uuid.UUID, limit, offset int) ([]domain.ItemStock, error) {
 	query := `
-		select ` + itemColumns + `
-		from inventory_items
-		where space_id = $1 and deleted_at is null
-		order by created_at desc, id desc
-		limit $2 offset $3
+		with page as (
+			select ` + itemColumns + `
+			from inventory_items
+			where space_id = $1 and deleted_at is null
+			order by created_at desc, id desc
+			limit $2 offset $3
+		), totals as (
+			select b.space_id, b.item_id, sum(b.remaining_quantity) as total_quantity
+			from page p
+			join batches b on b.space_id = p.space_id and b.item_id = p.id
+			group by b.space_id, b.item_id
+		)
+		select p.*, coalesce(t.total_quantity, 0)::text as total_quantity
+		from page p
+		left join totals t on t.space_id = p.space_id and t.item_id = p.id
+		order by p.created_at desc, p.id desc
 	`
 
 	rows, err := r.getExecutor(ctx).Query(ctx, query, spaceID, limit, offset)
@@ -117,18 +128,18 @@ func (r *ItemRepository) ListBySpace(ctx context.Context, spaceID uuid.UUID, lim
 		return nil, mapItemError(err)
 	}
 
-	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[itemDB])
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[itemStockDB])
 	if err != nil {
 		return nil, mapItemError(err)
 	}
 
-	items := make([]domain.InventoryItem, 0, len(records))
+	items := make([]domain.ItemStock, 0, len(records))
 	for i := range records {
-		item, err := toDomainItem(&records[i])
+		item, err := toDomainItemStock(&records[i])
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, *item)
+		items = append(items, item)
 	}
 
 	return items, nil

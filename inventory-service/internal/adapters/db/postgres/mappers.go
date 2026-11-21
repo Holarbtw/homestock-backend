@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 	"github.com/Holarbtw/homestock-backend/pkg/quantity"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func toIdempotencyRecord(record *idempotencyRecordDB) (*ports.IdempotencyRecord, error) {
@@ -131,6 +133,20 @@ func toDomainItem(record *itemDB) (*domain.InventoryItem, error) {
 	return &item, nil
 }
 
+func toDomainItemStock(record *itemStockDB) (domain.ItemStock, error) {
+	item, err := toDomainItem(&record.itemDB)
+	if err != nil {
+		return domain.ItemStock{}, err
+	}
+	total, err := quantity.ParseQuantity(record.TotalQuantity)
+	if err != nil {
+		return domain.ItemStock{}, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("parse total batch quantity for item %s: %w", item.ID, err),
+		)
+	}
+	return domain.ItemStock{Item: *item, TotalQuantity: *total}, nil
+}
+
 func toDBItem(item domain.InventoryItem) itemDB {
 	record := itemDB{
 		ID:               item.ID,
@@ -161,4 +177,101 @@ func toDBItem(item domain.InventoryItem) itemDB {
 	}
 
 	return record
+}
+
+func toDBBatch(batch domain.Batch) (batchDB, error) {
+	purchasedOn, err := toDBDate(batch.PurchasedOn)
+	if err != nil {
+		return batchDB{}, err
+	}
+	expiresOn, err := toDBDate(batch.ExpiresOn)
+	if err != nil {
+		return batchDB{}, err
+	}
+	return batchDB{
+		SpaceID:           batch.SpaceID,
+		ItemID:            batch.ItemID,
+		RemainingQuantity: batch.RemainingQuantity.String(),
+		PurchasedOn:       purchasedOn,
+		ExpiresOn:         expiresOn,
+	}, nil
+}
+
+func toDomainBatch(record *batchDB) (*domain.Batch, error) {
+	remaining, err := quantity.ParseQuantity(record.RemainingQuantity)
+	if err != nil {
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("parse remaining quantity for batch %s: %w", record.ID, err),
+		)
+	}
+	purchasedOn, err := toDomainDate(record.PurchasedOn)
+	if err != nil {
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("parse purchase date for batch %s: %w", record.ID, err),
+		)
+	}
+	expiresOn, err := toDomainDate(record.ExpiresOn)
+	if err != nil {
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("parse expiry date for batch %s: %w", record.ID, err),
+		)
+	}
+	return &domain.Batch{
+		ID:                record.ID,
+		SpaceID:           record.SpaceID,
+		ItemID:            record.ItemID,
+		RemainingQuantity: *remaining,
+		PurchasedOn:       purchasedOn,
+		AddedAt:           record.AddedAt,
+		ExpiresOn:         expiresOn,
+	}, nil
+}
+
+func toDBDate(date *domain.Date) (pgtype.Date, error) {
+	if date == nil {
+		return pgtype.Date{}, nil
+	}
+	if date.Year() == 0 {
+		return pgtype.Date{}, domain.ErrInvalidDate
+	}
+	return pgtype.Date{
+		Time:  time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
+		Valid: true,
+	}, nil
+}
+
+func toDomainDate(date pgtype.Date) (*domain.Date, error) {
+	if !date.Valid {
+		return nil, nil
+	}
+	if date.InfinityModifier != pgtype.Finite {
+		return nil, domain.ErrInvalidDate
+	}
+	return domain.ParseDate(date.Time.Format(time.DateOnly))
+}
+
+func toDomainStockOperation(record *stockOperationDB) (*domain.StockOperation, error) {
+	operationType := domain.StockOperationType(record.Type)
+	switch operationType {
+	case domain.Replenish, domain.Consume, domain.WriteOff:
+	default:
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("stock operation %s has an invalid persisted type: %q", record.ID, record.Type),
+		)
+	}
+	amount, err := quantity.ParseQuantity(record.Quantity)
+	if err != nil {
+		return nil, apperrors.ErrInternalServer.WithInternal(
+			fmt.Errorf("parse quantity for operation %s: %w", record.ID, err),
+		)
+	}
+	return &domain.StockOperation{
+		ID:          record.ID,
+		SpaceID:     record.SpaceID,
+		ItemID:      record.ItemID,
+		ActorUserID: record.ActorUserID,
+		Type:        operationType,
+		Quantity:    *amount,
+		OccurredAt:  record.OccurredAt,
+	}, nil
 }
