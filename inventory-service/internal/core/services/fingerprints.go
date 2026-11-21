@@ -55,7 +55,7 @@ type Fingerprint struct {
 	Hash    [sha256.Size]byte
 }
 
-func buildFingerprint(input any) (Fingerprint, error){
+func buildFingerprint(input any) (Fingerprint, error) {
 	envelop, err := serializeCommand(input)
 	if err != nil {
 		return Fingerprint{}, err
@@ -64,6 +64,6 @@ func buildFingerprint(input any) (Fingerprint, error){
 	hash := hashFingerprint(envelop.Bytes)
 	return Fingerprint{
 		Command: envelop.Command,
-		Hash: hash,
+		Hash:    hash,
 	}, nil
 }
