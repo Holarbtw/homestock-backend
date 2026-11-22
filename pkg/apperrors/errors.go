@@ -70,6 +70,7 @@ var (
 	ErrNotFound         = &CustomError{Code: "NOT_FOUND", StatusCode: http.StatusNotFound, Msg: "Resource not found"}
 	ErrConflict         = &CustomError{Code: "CONFLICT", StatusCode: http.StatusConflict, Msg: "Resource already exists"}
 	ErrValidationFailed = &CustomError{Code: "VALIDATION_FAILED", StatusCode: http.StatusBadRequest, Msg: "Validation failed"}
+	ErrUnsupportedMediaType = &CustomError{Code: "UNSUPPORTED_MEDIA_TYPE", StatusCode: http.StatusUnsupportedMediaType, Msg: "Unsupported media type"}
 )
 
 var (

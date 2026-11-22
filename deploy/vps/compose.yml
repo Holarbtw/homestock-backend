@@ -28,6 +28,8 @@ services:
     depends_on:
       auth-service:
         condition: service_healthy
+      inventory-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
       interval: 10s
@@ -123,6 +125,49 @@ services:
         condition: service_healthy
     logging: *logging
 
+  inventory-service:
+    image: ${IMAGE_PREFIX:?Set IMAGE_PREFIX}/inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    restart: unless-stopped
+    mem_limit: 128m
+    memswap_limit: 192m
+    cpu_shares: 1024
+    init: true
+    environment:
+      GOMEMLIMIT: 96MiB
+      INVENTORY_SERVICE_PORT: "8081"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-homestock}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      INVENTORY_DB_NAME: ${INVENTORY_DB_NAME:-homestock_inventory}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+      start_period: 10s
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    stop_grace_period: 15s
+    logging: *logging
+
+  inventory-migrations:
+    image: ${IMAGE_PREFIX:?Set IMAGE_PREFIX}/inventory-migrations:${IMAGE_TAG:?Set IMAGE_TAG}
+    profiles: ["tools"]
+    restart: "no"
+    mem_limit: 128m
+    memswap_limit: 192m
+    cpu_shares: 256
+    environment:
+      GOMEMLIMIT: 96MiB
+      GOOSE_DBSTRING: "host=postgres port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:?Set DB_PASSWORD} dbname=${INVENTORY_DB_NAME:-homestock_inventory} sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     restart: unless-stopped
@@ -148,6 +193,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       POSTGRES_DB: ${AUTH_DB_NAME:-homestock_auth}
       CATALOG_DB_NAME: ${CATALOG_DB_NAME:-homestock_catalog}
+      INVENTORY_DB_NAME: ${INVENTORY_DB_NAME:-homestock_inventory}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

@@ -1,0 +1,682 @@
+basePath: /api/v1/inventory
+definitions:
+  apperrors.CustomError:
+    properties:
+      code:
+        description: Stable machine-readable code. Clients should provide a fallback
+          for unknown codes.
+        example: INVALID_REQUEST
+        type: string
+      fields:
+        description: Optional validation details, addressed by request field name
+          and stable code.
+        items:
+          $ref: '#/definitions/apperrors.FieldError'
+        type: array
+      message:
+        description: Diagnostic message. Client-facing localized messages should be
+          selected by code.
+        example: Invalid request payload
+        type: string
+      status_code:
+        description: HTTP response status, repeated in the body for convenience.
+        example: 400
+        type: integer
+    required:
+    - code
+    - message
+    - status_code
+    type: object
+  apperrors.FieldError:
+    properties:
+      code:
+        type: string
+      field:
+        type: string
+    type: object
+  http.AddBatchRequest:
+    properties:
+      expires_on:
+        example: "2026-11-15"
+        format: date
+        type: string
+      purchased_on:
+        example: "2026-11-07"
+        format: date
+        type: string
+      quantity:
+        example: "1860.000"
+        type: string
+    required:
+    - quantity
+    type: object
+  http.BatchResponse:
+    properties:
+      added_at:
+        format: date-time
+        type: string
+      expires_on:
+        example: "2026-11-15"
+        format: date
+        type: string
+      id:
+        format: uuid
+        type: string
+      item_id:
+        format: uuid
+        type: string
+      purchased_on:
+        example: "2026-11-07"
+        format: date
+        type: string
+      remaining_quantity:
+        example: "1860.000"
+        type: string
+      space_id:
+        format: uuid
+        type: string
+    required:
+    - added_at
+    - id
+    - item_id
+    - remaining_quantity
+    - space_id
+    type: object
+  http.CreateItemRequest:
+    properties:
+      brand:
+        example: Простоквашино
+        type: string
+      catalog_product_id:
+        format: uuid
+        type: string
+      category:
+        enum:
+        - FOOD
+        - MEDICINE
+        - HOUSEHOLD
+        example: FOOD
+        type: string
+      external_image_url:
+        format: uri
+        type: string
+      first_batch:
+        $ref: '#/definitions/http.AddBatchRequest'
+      gtin:
+        example: "04600634855338"
+        type: string
+      minimum_quantity:
+        example: "500.000"
+        type: string
+      name:
+        example: Молоко 930 мл
+        type: string
+      package_quantity:
+        example: "930.000"
+        type: string
+      unit:
+        enum:
+        - ml
+        - g
+        - pcs
+        example: ml
+        type: string
+    required:
+    - category
+    - name
+    - unit
+    type: object
+  http.CreateItemResponse:
+    properties:
+      batches:
+        items:
+          $ref: '#/definitions/http.BatchResponse'
+        type: array
+      item:
+        $ref: '#/definitions/http.ItemResponse'
+      operation:
+        $ref: '#/definitions/http.StockOperationResponse'
+    required:
+    - batches
+    - item
+    type: object
+  http.DataResponse-http_CreateItemResponse:
+    properties:
+      data:
+        $ref: '#/definitions/http.CreateItemResponse'
+    type: object
+  http.DataResponse-http_ItemDetailsResponse:
+    properties:
+      data:
+        $ref: '#/definitions/http.ItemDetailsResponse'
+    type: object
+  http.DataResponse-http_ItemResponse:
+    properties:
+      data:
+        $ref: '#/definitions/http.ItemResponse'
+    type: object
+  http.ItemDetailsResponse:
+    properties:
+      batches:
+        items:
+          $ref: '#/definitions/http.BatchResponse'
+        type: array
+      item:
+        $ref: '#/definitions/http.ItemResponse'
+    required:
+    - batches
+    - item
+    type: object
+  http.ItemResponse:
+    properties:
+      brand:
+        example: Простоквашино
+        type: string
+      catalog_product_id:
+        format: uuid
+        type: string
+      category:
+        enum:
+        - FOOD
+        - MEDICINE
+        - HOUSEHOLD
+        example: FOOD
+        type: string
+      created_at:
+        format: date-time
+        type: string
+      gtin:
+        example: "04600634855338"
+        type: string
+      id:
+        format: uuid
+        type: string
+      image_url:
+        format: uri
+        type: string
+      is_low_stock:
+        example: false
+        type: boolean
+      minimum_quantity:
+        example: "500.000"
+        type: string
+      name:
+        example: Молоко 930 мл
+        type: string
+      package_quantity:
+        example: "930.000"
+        type: string
+      space_id:
+        format: uuid
+        type: string
+      total_quantity:
+        example: "1860.000"
+        type: string
+      unit:
+        enum:
+        - ml
+        - g
+        - pcs
+        example: ml
+        type: string
+      updated_at:
+        format: date-time
+        type: string
+    required:
+    - category
+    - created_at
+    - id
+    - name
+    - space_id
+    - total_quantity
+    - unit
+    - updated_at
+    type: object
+  http.PaginatedResponse-array_http_ItemResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/http.ItemResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/http.PaginationMeta'
+    type: object
+  http.PaginationMeta:
+    properties:
+      has_more:
+        type: boolean
+      limit:
+        type: integer
+      next_offset:
+        type: integer
+        x-nullable: true
+      offset:
+        type: integer
+    type: object
+  http.StockOperationLineResponse:
+    properties:
+      batch_id:
+        format: uuid
+        type: string
+      quantity:
+        example: "250.000"
+        type: string
+    required:
+    - batch_id
+    - quantity
+    type: object
+  http.StockOperationResponse:
+    properties:
+      actor_user_id:
+        format: uuid
+        type: string
+      id:
+        format: uuid
+        type: string
+      item_id:
+        format: uuid
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/http.StockOperationLineResponse'
+        type: array
+      occurred_at:
+        format: date-time
+        type: string
+      quantity:
+        example: "250.000"
+        type: string
+      space_id:
+        format: uuid
+        type: string
+      type:
+        enum:
+        - REPLENISH
+        - CONSUME
+        - WRITE_OFF
+        example: CONSUME
+        type: string
+    required:
+    - actor_user_id
+    - id
+    - item_id
+    - lines
+    - occurred_at
+    - quantity
+    - space_id
+    - type
+    type: object
+  http.UpdateItemRequest:
+    properties:
+      brand:
+        example: Простоквашино
+        type: string
+        x-nullable: true
+      category:
+        enum:
+        - FOOD
+        - MEDICINE
+        - HOUSEHOLD
+        example: FOOD
+        type: string
+      minimum_quantity:
+        example: "500.000"
+        type: string
+        x-nullable: true
+      name:
+        example: Молоко 930 мл
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |
+    ### Inventory contract
+
+    The public API prefix is `/api/v1/inventory`. The routes below are relative to that prefix. When calling the inventory service directly, use `/items` or `/items/{item_id}`. Send JSON bodies with `Content-Type: application/json`.
+
+    All item operations require `Authorization: Bearer <access_token>`. Use the access token issued by auth. Inventory resolves the personal space from the authenticated user. Create lazily opens a space if needed. A user who has no space gets an empty list. An item from another space is treated as not found.
+
+    ### Swagger access
+
+    Open `/api/v1/inventory/swagger/index.html` through the gateway. The VPS gateway requires HTTP Basic credentials for the Swagger UI, its assets and `doc.json`. In Swagger, use **Authorize** to set `Bearer <access_token>` for API requests. The local Nginx gateway serves Swagger without Basic authentication.
+
+    ### Requests and successful responses
+
+    | Operation | Request | Successful response |
+    | --- | --- | --- |
+    | `POST /items` | `Idempotency-Key` header and a JSON object with `name`, `category`, `unit` and optional item fields or `first_batch` | `201` with `data.item`, `data.batches` and optional `data.operation` |
+    | `GET /items` | Optional `limit` and `offset` query parameters | `200` with a `data` array of items and a `meta` object |
+    | `GET /items/{item_id}` | Item UUID in the path | `200` with `data.item` and `data.batches` |
+    | `PATCH /items/{item_id}` | Item UUID and a JSON object with any of `name`, `brand`, `category`, `minimum_quantity` | `200` with the updated item in `data` |
+    | `DELETE /items/{item_id}` | Item UUID in the path | `204` with no body |
+
+    Deleting an item removes it from active inventory, even if stock remains. Its batches and operation history are preserved. Getting, editing or deleting that item again returns `404`.
+
+    An item response always includes `id`, `space_id`, `name`, `category`, `unit`, `total_quantity`, `is_low_stock`, `created_at` and `updated_at`. Optional fields such as `brand`, `minimum_quantity` and `image_url` are omitted when unset. The total is the sum of the remaining quantities across all batches, including expired batches. `is_low_stock` is true when a threshold is set and the total is at or below it.
+
+    When present, `batches` contains full batch objects, including any with zero remaining quantity. Empty arrays appear as `[]`. Create returns the first replenishment in `operation` only when the request included a first batch. Each operation line identifies the batch and the amount added to it.
+
+    ### Input rules
+
+    - `name` and `brand` are trimmed. A provided string must be nonblank and contain no NUL characters. The limits are 200 Unicode code points for the name and 100 for the brand.
+    - `category` accepts `FOOD`, `MEDICINE` or `HOUSEHOLD`. `unit` accepts `ml`, `g` or `pcs`. The card's unit also applies to its batches and operations.
+    - Send quantities as nonnegative decimal strings with at most three fractional digits, for example `"930.000"`. `package_quantity` represents the size of one package. It must be positive when provided. `minimum_quantity` is an optional low-stock threshold and can be zero.
+    - `first_batch` is optional. When provided, it needs a positive `quantity`. Its `purchased_on` and `expires_on` dates are optional. The purchase date cannot be later than the current calendar date on the server. The expiry date can be in the past or the future.
+    - An optional `gtin` accepts 8, 12, 13 or 14 digits and is returned as 14 digits with leading zeroes if needed. An optional `catalog_product_id` must be a nonzero UUID. An optional `external_image_url` must be an absolute HTTP or HTTPS URL with a hostname.
+
+    In PATCH, a missing field keeps its current value. `null` clears `brand` or `minimum_quantity`. If `name` or `category` is included, it must contain a valid string. The following request clears the brand and sets an explicit zero threshold.
+
+    ```json
+    {
+      "brand": null,
+      "minimum_quantity": "0"
+    }
+    ```
+
+    ### Dates and timestamps
+
+    `purchased_on` and `expires_on` are calendar dates in `YYYY-MM-DD` with years from 0001 to 9999. Keep them as dates when displaying them. Server timestamps such as `created_at`, `updated_at`, `added_at` and `occurred_at` use RFC 3339 UTC and end in `Z`. Fractional seconds may be present. The client can convert these timestamps to local time for display.
+
+    ### Idempotent creation
+
+    Generate one `Idempotency-Key` for each new create action. A UUID string works. The key must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL characters. After a timeout or a lost response, retry the same request with the same key.
+
+    The key is scoped to the user's personal space. A successful replay returns `201` with the result saved by the original request, including the original item ID. Reusing the key with different valid input returns `409 IDEMPOTENCY_KEY_CONFLICT`.
+
+    ### Pagination
+
+    `limit` defaults to `20` and must be a positive integer. Values above `100` are capped at `100`. `offset` defaults to `0` and must be a nonnegative integer. An empty or invalid query value returns `400`. Items are sorted by `created_at` descending, then by `id` descending.
+
+    `meta.limit` and `meta.offset` show the values the server applied. Use `meta.next_offset` in the next request when `meta.has_more` is true. On the last page, `has_more` is false and `next_offset` is `null`. The list response does not include the total number of cards.
+
+    The following response represents an empty page.
+
+    ```json
+    {
+      "data": [],
+      "meta": {
+        "limit": 20,
+        "offset": 0,
+        "has_more": false,
+        "next_offset": null
+      }
+    }
+    ```
+
+    ### Gateway rate limits (VPS)
+
+    The VPS Caddy gateway applies two independent limits per client IP over a sliding five-second window.
+
+    | Operations | Requests per five seconds |
+    | --- | --- |
+    | `GET /items` and `GET /items/{item_id}` | 30 combined |
+    | `POST /items`, `PATCH /items/{item_id}` and `DELETE /items/{item_id}` | 10 combined |
+
+    Swagger and health checks are outside these limits. The local Nginx gateway and direct service calls are also outside these limits.
+
+    When the limit is reached, Caddy returns **HTTP 429** with `Retry-After` in seconds. Wait at least that long before retrying and use the same `Idempotency-Key` and body when retrying a create request. Handle this response by HTTP status because the gateway may return an empty or non-JSON body.
+
+    ### Error format
+
+    Application errors include `code`, `status_code` and `message`. Some validation errors include `fields`, an array of field paths and codes. The array is omitted when empty. Use the codes to select localized messages and fall back to the HTTP status for unknown codes. Internal causes are kept out of the response.
+
+    The following error comes from a PATCH request with an invalid name and category.
+
+    ```json
+    {
+      "code": "INVALID_ITEM_UPDATE",
+      "status_code": 400,
+      "message": "Invalid item update data",
+      "fields": [
+        { "field": "name", "code": "INVALID_ITEM_NAME" },
+        { "field": "category", "code": "INVALID_ITEM_CATEGORY" }
+      ]
+    }
+    ```
+
+    | HTTP | Code | Meaning |
+    | --- | --- | --- |
+    | 400 | `INVALID_REQUEST` | The body, path UUID or pagination parameters could not be read in the expected format |
+    | 400 | `INVALID_ITEM_CREATE` | Creation input failed validation. Check `fields` for details such as `INVALID_IDEMPOTENCY_KEY`, `INVALID_DATE` or `INVALID_BATCH_QUANTITY` |
+    | 400 | `INVALID_ITEM_UPDATE` | One or more editable fields failed validation. Check `fields` |
+    | 400 | `INVALID_QUANTITY_FORMAT`, `QUANTITY_PRECISION_EXCEEDED`, `QUANTITY_OUT_OF_RANGE` | A quantity could not be parsed. On create these codes can appear within `fields` |
+    | 401 | `UNAUTHORIZED` | The Bearer header is missing or malformed |
+    | 401 | `INVALID_TOKEN` | The access token is invalid or expired |
+    | 404 | `ITEM_NOT_FOUND` | The item is absent, deleted or outside the user's space |
+    | 404 | `SPACE_NOT_FOUND` | The user has no personal space for the requested get, update or delete operation |
+    | 409 | `IDEMPOTENCY_KEY_CONFLICT` | The key was already used for a different request |
+    | 415 | `UNSUPPORTED_MEDIA_TYPE` | The create or update request must use `Content-Type: application/json` |
+    | 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |
+
+    Errors generated by the router or gateway can use another format. Clients should also handle an empty or non-JSON error body.
+  title: Homestock Inventory Service API
+  version: "1.0"
+paths:
+  /items:
+    get:
+      description: |-
+        Returns a page of active items ordered by creation time and ID in descending order. Each item's total includes expired batches.
+        Use meta.next_offset for the next page. When the last page is reached, meta.has_more is false and meta.next_offset is null. Empty pages return an empty data array.
+      parameters:
+      - default: 20
+        description: Page size. Values above 100 are capped at 100
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of items to skip
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.PaginatedResponse-array_http_ItemResponse'
+        "400":
+          description: INVALID_REQUEST
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: List inventory items
+      tags:
+      - Items
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates an item with an optional first batch. Without a first batch, batches is empty and operation is omitted.
+        Retry the same request with the same Idempotency-Key to receive the saved result with status 201. Reusing the key for different input returns 409.
+      parameters:
+      - description: Client-generated request key, up to 200 bytes
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Item and optional first batch
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.DataResponse-http_CreateItemResponse'
+        "400":
+          description: INVALID_REQUEST, INVALID_ITEM_CREATE
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "409":
+          description: IDEMPOTENCY_KEY_CONFLICT
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "415":
+          description: UNSUPPORTED_MEDIA_TYPE
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Create an inventory item
+      tags:
+      - Items
+  /items/{item_id}:
+    delete:
+      description: |-
+        Removes an item from active inventory and preserves its batches and operation history.
+        Items with remaining stock can be deleted. A repeat deletion returns 404.
+      parameters:
+      - description: Item UUID
+        format: uuid
+        in: path
+        name: item_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Item deleted successfully
+        "400":
+          description: INVALID_REQUEST
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "404":
+          description: ITEM_NOT_FOUND, SPACE_NOT_FOUND
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an inventory item
+      tags:
+      - Items
+    get:
+      description: |-
+        Returns an active item in the authenticated user's space with its total remaining quantity and batches.
+        The total includes expired batches. Items without batches return an empty batches array.
+      parameters:
+      - description: Item UUID
+        format: uuid
+        in: path
+        name: item_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DataResponse-http_ItemDetailsResponse'
+        "400":
+          description: INVALID_REQUEST
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "404":
+          description: ITEM_NOT_FOUND, SPACE_NOT_FOUND
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an inventory item
+      tags:
+      - Items
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Updates the name, brand, category or minimum quantity and returns the updated item.
+        Omitted fields keep their existing values. Explicit null clears brand or minimum_quantity. Name and category require a valid value when supplied. Send quantities as decimal strings.
+      parameters:
+      - description: Item UUID
+        format: uuid
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/http.UpdateItemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DataResponse-http_ItemResponse'
+        "400":
+          description: INVALID_REQUEST, INVALID_ITEM_UPDATE, INVALID_QUANTITY_FORMAT,
+            QUANTITY_PRECISION_EXCEEDED, QUANTITY_OUT_OF_RANGE
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "404":
+          description: ITEM_NOT_FOUND, SPACE_NOT_FOUND
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "415":
+          description: UNSUPPORTED_MEDIA_TYPE
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Update an inventory item
+      tags:
+      - Items
+securityDefinitions:
+  ApiKeyAuth:
+    description: Type "Bearer " followed by a space and then your JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

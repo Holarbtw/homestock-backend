@@ -3,10 +3,9 @@
 		max_size 1MB
 	}
 
-	@swagger path /api/v1/auth/swagger /api/v1/auth/swagger/*
+	@swagger path /api/v1/auth/swagger /api/v1/auth/swagger/* /api/v1/inventory/swagger /api/v1/inventory/swagger/*
 
-	# Preserve the order: short global guard, IP budgets, long global budgets,
-	# then path rewriting. Rejected requests never reach auth-service.
+	# Evaluate rate limits before rewriting public paths for upstream services.
 	route {
 		# Bound requests before allocating per-IP limiter state.
 		rate_limit {
@@ -99,6 +98,32 @@
 			}
 		}
 
+		rate_limit {
+			sweep_interval 5s
+			zone inventory_reads_per_ip {
+				match {
+					method GET
+					path /api/v1/inventory/items /api/v1/inventory/items/*
+				}
+				key {remote_host}
+				window 5s
+				events 30
+			}
+			zone inventory_writes_per_ip {
+				match {
+					method POST
+					path /api/v1/inventory/items
+				}
+				match {
+					method PATCH DELETE
+					path /api/v1/inventory/items/*
+				}
+				key {remote_host}
+				window 5s
+				events 10
+			}
+		}
+
 		# Protect both the UI and the schema. Credentials are supplied only to
 		# the gateway; the application's API continues to use Bearer JWTs.
 		basic_auth @swagger bcrypt "HomeStock Swagger" {
@@ -109,6 +134,14 @@
 		handle_path /api/v1/auth/* {
 			reverse_proxy auth-service:8080 {
 				# Caddy is the public edge; do not accept client-supplied IP headers.
+				header_up -True-Client-IP
+				header_up X-Real-IP {remote_host}
+				header_up X-Forwarded-For {remote_host}
+			}
+		}
+
+		handle_path /api/v1/inventory/* {
+			reverse_proxy inventory-service:8081 {
 				header_up -True-Client-IP
 				header_up X-Real-IP {remote_host}
 				header_up X-Forwarded-For {remote_host}

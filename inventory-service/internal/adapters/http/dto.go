@@ -1,10 +1,27 @@
 package http
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+type DataResponse[T any] struct {
+	Data T `json:"data"`
+}
+
+type PaginatedResponse[T any] struct {
+	Data T              `json:"data"`
+	Meta PaginationMeta `json:"meta"`
+}
+
+type PaginationMeta struct {
+	Limit      int  `json:"limit"`
+	Offset     int  `json:"offset"`
+	HasMore    bool `json:"has_more"`
+	NextOffset *int `json:"next_offset" extensions:"x-nullable"`
+}
 
 type CreateItemRequest struct {
 	Name             string           `json:"name" validate:"required" example:"Молоко 930 мл"`
@@ -33,6 +50,13 @@ type DecreaseItemRequest struct {
 type DecreaseBatchRequest struct {
 	Type     string `json:"type" validate:"required" enums:"CONSUME,WRITE_OFF" example:"WRITE_OFF"`
 	Quantity string `json:"quantity" validate:"required" example:"100.000"`
+}
+
+type UpdateItemRequest struct {
+	Name            json.RawMessage `json:"name" swaggertype:"string" example:"Молоко 930 мл"`
+	Brand           json.RawMessage `json:"brand,omitempty" swaggertype:"string" extensions:"x-nullable" example:"Простоквашино"`
+	Category        json.RawMessage `json:"category" swaggertype:"string" enums:"FOOD,MEDICINE,HOUSEHOLD" example:"FOOD"`
+	MinimumQuantity json.RawMessage `json:"minimum_quantity,omitempty" swaggertype:"string" extensions:"x-nullable" example:"500.000"`
 }
 
 type ItemResponse struct {

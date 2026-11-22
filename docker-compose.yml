@@ -7,10 +7,13 @@ services:
       - "${GATEWAY_PORT:-80}:80"
     environment:
       - AUTH_SERVICE_PORT=${AUTH_SERVICE_PORT:-8080}
+      - INVENTORY_SERVICE_PORT=${INVENTORY_SERVICE_PORT:-8081}
     volumes:
       - ./gateway/auth.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       auth-service:
+        condition: service_healthy
+      inventory-service:
         condition: service_healthy
     networks:
       - homestock-network
@@ -53,6 +56,49 @@ services:
       - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${AUTH_DB_NAME:-homestock_auth} sslmode=disable
     volumes:
       - ./auth-service/migrations:/migrations
+    command: up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - homestock-network
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    container_name: homestock-inventory-service
+    restart: unless-stopped
+    stop_grace_period: 15s
+    environment:
+      - INVENTORY_SERVICE_PORT=${INVENTORY_SERVICE_PORT:-8081}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-homestock}
+      - DB_PASSWORD=${DB_PASSWORD:-homestock_secret}
+      - INVENTORY_DB_NAME=${INVENTORY_DB_NAME:-homestock_inventory}
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      inventory-migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${INVENTORY_SERVICE_PORT:-8081}/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - homestock-network
+
+  inventory-migrations:
+    image: kukymbr/goose-docker
+    container_name: homestock-inventory-migrations
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=host=${DB_HOST:-postgres} port=5432 user=${DB_USER:-homestock} password=${DB_PASSWORD:-homestock_secret} dbname=${INVENTORY_DB_NAME:-homestock_inventory} sslmode=disable
+    volumes:
+      - ./inventory-service/migrations:/migrations
     command: up
     depends_on:
       postgres:

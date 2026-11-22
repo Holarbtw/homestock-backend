@@ -6,6 +6,7 @@ import (
 
 	"github.com/Holarbtw/homestock-backend/auth-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
+	"github.com/Holarbtw/homestock-backend/pkg/httpresponse"
 	pkgJWT "github.com/Holarbtw/homestock-backend/pkg/jwt"
 )
 
@@ -17,12 +18,6 @@ func NewAuthHandler(authService ports.AuthService) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 	}
-}
-
-func sendJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
 }
 
 // @Summary Register a new user
@@ -53,7 +48,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusCreated, AuthResponse{
+	httpresponse.WriteJSON(w, http.StatusCreated, AuthResponse{
 		AccessToken:     tokens.AccessToken,
 		RefreshToken:    tokens.RefreshToken,
 		AccessExpiresAt: tokens.AccessExpiresAt.UTC(),
@@ -89,7 +84,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, AuthResponse{
+	httpresponse.WriteJSON(w, http.StatusOK, AuthResponse{
 		AccessToken:     tokens.AccessToken,
 		RefreshToken:    tokens.RefreshToken,
 		AccessExpiresAt: tokens.AccessExpiresAt.UTC(),
@@ -124,7 +119,7 @@ func (h *AuthHandler) LoginGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusCreated, AuthResponse{
+	httpresponse.WriteJSON(w, http.StatusCreated, AuthResponse{
 		AccessToken:     tokens.AccessToken,
 		RefreshToken:    tokens.RefreshToken,
 		AccessExpiresAt: tokens.AccessExpiresAt.UTC(),
@@ -161,7 +156,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, TokenResponse{
+	httpresponse.WriteJSON(w, http.StatusOK, TokenResponse{
 		AccessToken:     tokens.AccessToken,
 		RefreshToken:    tokens.RefreshToken,
 		AccessExpiresAt: tokens.AccessExpiresAt.UTC(),
@@ -233,7 +228,7 @@ func (h *AuthHandler) LinkGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, toUserResponse(user))
+	httpresponse.WriteJSON(w, http.StatusOK, toUserResponse(user))
 }
 
 // @Summary Change password
@@ -311,7 +306,7 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, toUserResponse(user))
+	httpresponse.WriteJSON(w, http.StatusOK, toUserResponse(user))
 }
 
 // @Summary Update user profile
@@ -348,7 +343,7 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, toUserResponse(user))
+	httpresponse.WriteJSON(w, http.StatusOK, toUserResponse(user))
 }
 
 // @Summary Get current user profile
@@ -375,5 +370,5 @@ func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendJSON(w, http.StatusOK, toUserResponse(user))
+	httpresponse.WriteJSON(w, http.StatusOK, toUserResponse(user))
 }
