@@ -1,0 +1,790 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "### Inventory contract\n\nThe public API prefix is `/api/v1/inventory`. The routes below are relative to that prefix. When calling the inventory service directly, use `/items` or `/items/{item_id}`. Send JSON bodies with `Content-Type: application/json`.\n\nAll item operations require `Authorization: Bearer \u003caccess_token\u003e`. Use the access token issued by auth. Inventory resolves the personal space from the authenticated user. Create lazily opens a space if needed. A user who has no space gets an empty list. An item from another space is treated as not found.\n\n### Swagger access\n\nOpen `/api/v1/inventory/swagger/index.html` through the gateway. The VPS gateway requires HTTP Basic credentials for the Swagger UI, its assets and `doc.json`. In Swagger, use **Authorize** to set `Bearer \u003caccess_token\u003e` for API requests. The local Nginx gateway serves Swagger without Basic authentication.\n\n### Requests and successful responses\n\n| Operation | Request | Successful response |\n| --- | --- | --- |\n| `POST /items` | `Idempotency-Key` header and a JSON object with `name`, `category`, `unit` and optional item fields or `first_batch` | `201` with `data.item`, `data.batches` and optional `data.operation` |\n| `GET /items` | Optional `limit` and `offset` query parameters | `200` with a `data` array of items and a `meta` object |\n| `GET /items/{item_id}` | Item UUID in the path | `200` with `data.item` and `data.batches` |\n| `PATCH /items/{item_id}` | Item UUID and a JSON object with any of `name`, `brand`, `category`, `minimum_quantity` | `200` with the updated item in `data` |\n| `DELETE /items/{item_id}` | Item UUID in the path | `204` with no body |\n\nDeleting an item removes it from active inventory, even if stock remains. Its batches and operation history are preserved. Getting, editing or deleting that item again returns `404`.\n\nAn item response always includes `id`, `space_id`, `name`, `category`, `unit`, `total_quantity`, `is_low_stock`, `created_at` and `updated_at`. Optional fields such as `brand`, `minimum_quantity` and `image_url` are omitted when unset. The total is the sum of the remaining quantities across all batches, including expired batches. `is_low_stock` is true when a threshold is set and the total is at or below it.\n\nWhen present, `batches` contains full batch objects, including any with zero remaining quantity. Empty arrays appear as `[]`. Create returns the first replenishment in `operation` only when the request included a first batch. Each operation line identifies the batch and the amount added to it.\n\n### Input rules\n\n- `name` and `brand` are trimmed. A provided string must be nonblank and contain no NUL characters. The limits are 200 Unicode code points for the name and 100 for the brand.\n- `category` accepts `FOOD`, `MEDICINE` or `HOUSEHOLD`. `unit` accepts `ml`, `g` or `pcs`. The card's unit also applies to its batches and operations.\n- Send quantities as nonnegative decimal strings with at most three fractional digits, for example `\"930.000\"`. `package_quantity` represents the size of one package. It must be positive when provided. `minimum_quantity` is an optional low-stock threshold and can be zero.\n- `first_batch` is optional. When provided, it needs a positive `quantity`. Its `purchased_on` and `expires_on` dates are optional. The purchase date cannot be later than the current calendar date on the server. The expiry date can be in the past or the future.\n- An optional `gtin` accepts 8, 12, 13 or 14 digits and is returned as 14 digits with leading zeroes if needed. An optional `catalog_product_id` must be a nonzero UUID. An optional `external_image_url` must be an absolute HTTP or HTTPS URL with a hostname.\n\nIn PATCH, a missing field keeps its current value. `null` clears `brand` or `minimum_quantity`. If `name` or `category` is included, it must contain a valid string. The following request clears the brand and sets an explicit zero threshold.\n\n```json\n{\n  \"brand\": null,\n  \"minimum_quantity\": \"0\"\n}\n```\n\n### Dates and timestamps\n\n`purchased_on` and `expires_on` are calendar dates in `YYYY-MM-DD` with years from 0001 to 9999. Keep them as dates when displaying them. Server timestamps such as `created_at`, `updated_at`, `added_at` and `occurred_at` use RFC 3339 UTC and end in `Z`. Fractional seconds may be present. The client can convert these timestamps to local time for display.\n\n### Idempotent creation\n\nGenerate one `Idempotency-Key` for each new create action. A UUID string works. The key must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL characters. After a timeout or a lost response, retry the same request with the same key.\n\nThe key is scoped to the user's personal space. A successful replay returns `201` with the result saved by the original request, including the original item ID. Reusing the key with different valid input returns `409 IDEMPOTENCY_KEY_CONFLICT`.\n\n### Pagination\n\n`limit` defaults to `20` and must be a positive integer. Values above `100` are capped at `100`. `offset` defaults to `0` and must be a nonnegative integer. An empty or invalid query value returns `400`. Items are sorted by `created_at` descending, then by `id` descending.\n\n`meta.limit` and `meta.offset` show the values the server applied. Use `meta.next_offset` in the next request when `meta.has_more` is true. On the last page, `has_more` is false and `next_offset` is `null`. The list response does not include the total number of cards.\n\nThe following response represents an empty page.\n\n```json\n{\n  \"data\": [],\n  \"meta\": {\n    \"limit\": 20,\n    \"offset\": 0,\n    \"has_more\": false,\n    \"next_offset\": null\n  }\n}\n```\n\n### Gateway rate limits (VPS)\n\nThe VPS Caddy gateway applies two independent limits per client IP over a sliding five-second window.\n\n| Operations | Requests per five seconds |\n| --- | --- |\n| `GET /items` and `GET /items/{item_id}` | 30 combined |\n| `POST /items`, `PATCH /items/{item_id}` and `DELETE /items/{item_id}` | 10 combined |\n\nSwagger and health checks are outside these limits. The local Nginx gateway and direct service calls are also outside these limits.\n\nWhen the limit is reached, Caddy returns **HTTP 429** with `Retry-After` in seconds. Wait at least that long before retrying and use the same `Idempotency-Key` and body when retrying a create request. Handle this response by HTTP status because the gateway may return an empty or non-JSON body.\n\n### Error format\n\nApplication errors include `code`, `status_code` and `message`. Some validation errors include `fields`, an array of field paths and codes. The array is omitted when empty. Use the codes to select localized messages and fall back to the HTTP status for unknown codes. Internal causes are kept out of the response.\n\nThe following error comes from a PATCH request with an invalid name and category.\n\n```json\n{\n  \"code\": \"INVALID_ITEM_UPDATE\",\n  \"status_code\": 400,\n  \"message\": \"Invalid item update data\",\n  \"fields\": [\n    { \"field\": \"name\", \"code\": \"INVALID_ITEM_NAME\" },\n    { \"field\": \"category\", \"code\": \"INVALID_ITEM_CATEGORY\" }\n  ]\n}\n```\n\n| HTTP | Code | Meaning |\n| --- | --- | --- |\n| 400 | `INVALID_REQUEST` | The body, path UUID or pagination parameters could not be read in the expected format |\n| 400 | `INVALID_ITEM_CREATE` | Creation input failed validation. Check `fields` for details such as `INVALID_IDEMPOTENCY_KEY`, `INVALID_DATE` or `INVALID_BATCH_QUANTITY` |\n| 400 | `INVALID_ITEM_UPDATE` | One or more editable fields failed validation. Check `fields` |\n| 400 | `INVALID_QUANTITY_FORMAT`, `QUANTITY_PRECISION_EXCEEDED`, `QUANTITY_OUT_OF_RANGE` | A quantity could not be parsed. On create these codes can appear within `fields` |\n| 401 | `UNAUTHORIZED` | The Bearer header is missing or malformed |\n| 401 | `INVALID_TOKEN` | The access token is invalid or expired |\n| 404 | `ITEM_NOT_FOUND` | The item is absent, deleted or outside the user's space |\n| 404 | `SPACE_NOT_FOUND` | The user has no personal space for the requested get, update or delete operation |\n| 409 | `IDEMPOTENCY_KEY_CONFLICT` | The key was already used for a different request |\n| 415 | `UNSUPPORTED_MEDIA_TYPE` | The create or update request must use `Content-Type: application/json` |\n| 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |\n\nErrors generated by the router or gateway can use another format. Clients should also handle an empty or non-JSON error body.\n",
+        "title": "Homestock Inventory Service API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/api/v1/inventory",
+    "paths": {
+        "/items": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a page of active items ordered by creation time and ID in descending order. Each item's total includes expired batches.\nUse meta.next_offset for the next page. When the last page is reached, meta.has_more is false and meta.next_offset is null. Empty pages return an empty data array.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "List inventory items",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size. Values above 100 are capped at 100",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Number of items to skip",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.PaginatedResponse-array_http_ItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "INVALID_REQUEST",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "500": {
+                        "description": "INTERNAL_SERVER_ERROR",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates an item with an optional first batch. Without a first batch, batches is empty and operation is omitted.\nRetry the same request with the same Idempotency-Key to receive the saved result with status 201. Reusing the key for different input returns 409.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Create an inventory item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Client-generated request key, up to 200 bytes",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Item and optional first batch",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.CreateItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/http.DataResponse-http_CreateItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "INVALID_REQUEST, INVALID_ITEM_CREATE",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "409": {
+                        "description": "IDEMPOTENCY_KEY_CONFLICT",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "415": {
+                        "description": "UNSUPPORTED_MEDIA_TYPE",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "500": {
+                        "description": "INTERNAL_SERVER_ERROR",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    }
+                }
+            }
+        },
+        "/items/{item_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns an active item in the authenticated user's space with its total remaining quantity and batches.\nThe total includes expired batches. Items without batches return an empty batches array.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Get an inventory item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Item UUID",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.DataResponse-http_ItemDetailsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "INVALID_REQUEST",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "ITEM_NOT_FOUND, SPACE_NOT_FOUND",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "500": {
+                        "description": "INTERNAL_SERVER_ERROR",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Removes an item from active inventory and preserves its batches and operation history.\nItems with remaining stock can be deleted. A repeat deletion returns 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Delete an inventory item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Item UUID",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Item deleted successfully"
+                    },
+                    "400": {
+                        "description": "INVALID_REQUEST",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "ITEM_NOT_FOUND, SPACE_NOT_FOUND",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "500": {
+                        "description": "INTERNAL_SERVER_ERROR",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the name, brand, category or minimum quantity and returns the updated item.\nOmitted fields keep their existing values. Explicit null clears brand or minimum_quantity. Name and category require a valid value when supplied. Send quantities as decimal strings.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Update an inventory item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Item UUID",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.UpdateItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.DataResponse-http_ItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "INVALID_REQUEST, INVALID_ITEM_UPDATE, INVALID_QUANTITY_FORMAT, QUANTITY_PRECISION_EXCEEDED, QUANTITY_OUT_OF_RANGE",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHORIZED, INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "404": {
+                        "description": "ITEM_NOT_FOUND, SPACE_NOT_FOUND",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "415": {
+                        "description": "UNSUPPORTED_MEDIA_TYPE",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    },
+                    "500": {
+                        "description": "INTERNAL_SERVER_ERROR",
+                        "schema": {
+                            "$ref": "#/definitions/apperrors.CustomError"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "apperrors.CustomError": {
+            "type": "object",
+            "required": [
+                "code",
+                "message",
+                "status_code"
+            ],
+            "properties": {
+                "code": {
+                    "description": "Stable machine-readable code. Clients should provide a fallback for unknown codes.",
+                    "type": "string",
+                    "example": "INVALID_REQUEST"
+                },
+                "fields": {
+                    "description": "Optional validation details, addressed by request field name and stable code.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/apperrors.FieldError"
+                    }
+                },
+                "message": {
+                    "description": "Diagnostic message. Client-facing localized messages should be selected by code.",
+                    "type": "string",
+                    "example": "Invalid request payload"
+                },
+                "status_code": {
+                    "description": "HTTP response status, repeated in the body for convenience.",
+                    "type": "integer",
+                    "example": 400
+                }
+            }
+        },
+        "apperrors.FieldError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.AddBatchRequest": {
+            "type": "object",
+            "required": [
+                "quantity"
+            ],
+            "properties": {
+                "expires_on": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-11-15"
+                },
+                "purchased_on": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-11-07"
+                },
+                "quantity": {
+                    "type": "string",
+                    "example": "1860.000"
+                }
+            }
+        },
+        "http.BatchResponse": {
+            "type": "object",
+            "required": [
+                "added_at",
+                "id",
+                "item_id",
+                "remaining_quantity",
+                "space_id"
+            ],
+            "properties": {
+                "added_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "expires_on": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-11-15"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "item_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "purchased_on": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-11-07"
+                },
+                "remaining_quantity": {
+                    "type": "string",
+                    "example": "1860.000"
+                },
+                "space_id": {
+                    "type": "string",
+                    "format": "uuid"
+                }
+            }
+        },
+        "http.CreateItemRequest": {
+            "type": "object",
+            "required": [
+                "category",
+                "name",
+                "unit"
+            ],
+            "properties": {
+                "brand": {
+                    "type": "string",
+                    "example": "Простоквашино"
+                },
+                "catalog_product_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "FOOD",
+                        "MEDICINE",
+                        "HOUSEHOLD"
+                    ],
+                    "example": "FOOD"
+                },
+                "external_image_url": {
+                    "type": "string",
+                    "format": "uri"
+                },
+                "first_batch": {
+                    "$ref": "#/definitions/http.AddBatchRequest"
+                },
+                "gtin": {
+                    "type": "string",
+                    "example": "04600634855338"
+                },
+                "minimum_quantity": {
+                    "type": "string",
+                    "example": "500.000"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Молоко 930 мл"
+                },
+                "package_quantity": {
+                    "type": "string",
+                    "example": "930.000"
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": [
+                        "ml",
+                        "g",
+                        "pcs"
+                    ],
+                    "example": "ml"
+                }
+            }
+        },
+        "http.CreateItemResponse": {
+            "type": "object",
+            "required": [
+                "batches",
+                "item"
+            ],
+            "properties": {
+                "batches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.BatchResponse"
+                    }
+                },
+                "item": {
+                    "$ref": "#/definitions/http.ItemResponse"
+                },
+                "operation": {
+                    "$ref": "#/definitions/http.StockOperationResponse"
+                }
+            }
+        },
+        "http.DataResponse-http_CreateItemResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/http.CreateItemResponse"
+                }
+            }
+        },
+        "http.DataResponse-http_ItemDetailsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/http.ItemDetailsResponse"
+                }
+            }
+        },
+        "http.DataResponse-http_ItemResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/http.ItemResponse"
+                }
+            }
+        },
+        "http.ItemDetailsResponse": {
+            "type": "object",
+            "required": [
+                "batches",
+                "item"
+            ],
+            "properties": {
+                "batches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.BatchResponse"
+                    }
+                },
+                "item": {
+                    "$ref": "#/definitions/http.ItemResponse"
+                }
+            }
+        },
+        "http.ItemResponse": {
+            "type": "object",
+            "required": [
+                "category",
+                "created_at",
+                "id",
+                "name",
+                "space_id",
+                "total_quantity",
+                "unit",
+                "updated_at"
+            ],
+            "properties": {
+                "brand": {
+                    "type": "string",
+                    "example": "Простоквашино"
+                },
+                "catalog_product_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "FOOD",
+                        "MEDICINE",
+                        "HOUSEHOLD"
+                    ],
+                    "example": "FOOD"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "gtin": {
+                    "type": "string",
+                    "example": "04600634855338"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "image_url": {
+                    "type": "string",
+                    "format": "uri"
+                },
+                "is_low_stock": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "minimum_quantity": {
+                    "type": "string",
+                    "example": "500.000"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Молоко 930 мл"
+                },
+                "package_quantity": {
+                    "type": "string",
+                    "example": "930.000"
+                },
+                "space_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "total_quantity": {
+                    "type": "string",
+                    "example": "1860.000"
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": [
+                        "ml",
+                        "g",
+                        "pcs"
+                    ],
+                    "example": "ml"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "http.PaginatedResponse-array_http_ItemResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.ItemResponse"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/http.PaginationMeta"
+                }
+            }
+        },
+        "http.PaginationMeta": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "next_offset": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "offset": {
+                    "type": "integer"
+                }
+            }
+        },
+        "http.StockOperationLineResponse": {
+            "type": "object",
+            "required": [
+                "batch_id",
+                "quantity"
+            ],
+            "properties": {
+                "batch_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "quantity": {
+                    "type": "string",
+                    "example": "250.000"
+                }
+            }
+        },
+        "http.StockOperationResponse": {
+            "type": "object",
+            "required": [
+                "actor_user_id",
+                "id",
+                "item_id",
+                "lines",
+                "occurred_at",
+                "quantity",
+                "space_id",
+                "type"
+            ],
+            "properties": {
+                "actor_user_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "item_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.StockOperationLineResponse"
+                    }
+                },
+                "occurred_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "quantity": {
+                    "type": "string",
+                    "example": "250.000"
+                },
+                "space_id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "REPLENISH",
+                        "CONSUME",
+                        "WRITE_OFF"
+                    ],
+                    "example": "CONSUME"
+                }
+            }
+        },
+        "http.UpdateItemRequest": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string",
+                    "x-nullable": true,
+                    "example": "Простоквашино"
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "FOOD",
+                        "MEDICINE",
+                        "HOUSEHOLD"
+                    ],
+                    "example": "FOOD"
+                },
+                "minimum_quantity": {
+                    "type": "string",
+                    "x-nullable": true,
+                    "example": "500.000"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Молоко 930 мл"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "Type \"Bearer \" followed by a space and then your JWT access token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}
