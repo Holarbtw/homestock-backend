@@ -106,6 +106,7 @@ func checkPolicy(encoded json.RawMessage, policy ratePolicy) error {
 
 func probe(client *http.Client, base, request string, counter int) (int, http.Header, error) {
 	method, path, _ := strings.Cut(request, " ")
+	path = strings.ReplaceAll(path, "*", "11111111-1111-1111-1111-111111111111")
 	req, err := http.NewRequest(method, base+path, strings.NewReader("{"))
 	if err != nil {
 		return 0, nil, err
@@ -187,7 +188,16 @@ func checkBoundary(image string, encoded json.RawMessage, policy ratePolicy) (re
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	outside := []string{"GET /api/v1/auth/register", "GET /api/v1/auth/refresh", "POST /api/v1/auth/login", "POST /api/v1/auth/logout", "GET /api/v1/auth/profile"}
+	outside := []string{
+		"GET /api/v1/auth/register", "GET /api/v1/auth/refresh", "POST /api/v1/auth/login", "POST /api/v1/auth/logout", "GET /api/v1/auth/profile",
+		"GET /api/v1/inventory/swagger/doc.json", "GET /api/v1/inventory/healthz",
+	}
+	switch policy.name {
+	case "inventory_reads_per_ip":
+		outside = append(outside, "POST /api/v1/inventory/items", "PATCH /api/v1/inventory/items/*", "DELETE /api/v1/inventory/items/*")
+	case "inventory_writes_per_ip":
+		outside = append(outside, "GET /api/v1/inventory/items", "GET /api/v1/inventory/items/*")
+	}
 	for i := 0; i < policy.events; i++ {
 		status, _, err := probe(client, base, policy.requests[i%len(policy.requests)], i)
 		if err != nil || status != 204 {
@@ -240,6 +250,12 @@ func check(image, configPath string) error {
 		{"registration_global_day", "registration", 24 * time.Hour, 500, registration},
 		{"refresh_per_ip", "{http.request.remote.host}", time.Minute, 20, refresh},
 		{"refresh_global", "refresh", time.Minute, 100, refresh},
+		{"inventory_reads_per_ip", "{http.request.remote.host}", 5 * time.Second, 30, []string{
+			"GET /api/v1/inventory/items", "GET /api/v1/inventory/items/*",
+		}},
+		{"inventory_writes_per_ip", "{http.request.remote.host}", 5 * time.Second, 10, []string{
+			"POST /api/v1/inventory/items", "PATCH /api/v1/inventory/items/*", "DELETE /api/v1/inventory/items/*",
+		}},
 	}
 	if len(zones) != len(policies) {
 		return fmt.Errorf("got %d rate limit zones, want %d", len(zones), len(policies))

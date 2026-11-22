@@ -6,6 +6,7 @@ on:
     paths:
       - auth-service/**
       - catalog-service/**
+      - inventory-service/**
       - pkg/**
       - proto/**
       - deploy/**
@@ -18,6 +19,7 @@ on:
     paths:
       - auth-service/**
       - catalog-service/**
+      - inventory-service/**
       - pkg/**
       - proto/**
       - deploy/**
@@ -126,7 +128,29 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=catalog-migrations
           cache-to: type=gha,mode=max,scope=catalog-migrations
-      - name: Check registration and refresh limits
+      - name: Build inventory image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: inventory-service/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/inventory-service:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=inventory
+          cache-to: type=gha,mode=max,scope=inventory
+      - name: Build inventory migrations image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/inventory-migrations.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.images.outputs.prefix }}/inventory-migrations:${{ steps.images.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=inventory-migrations
+          cache-to: type=gha,mode=max,scope=inventory-migrations
+      - name: Check gateway rate limits
         env:
           IMAGE_PREFIX: ${{ steps.images.outputs.prefix }}
           IMAGE_TAG: ${{ steps.images.outputs.tag }}
@@ -153,6 +177,8 @@ jobs:
           docker push "$IMAGE_PREFIX/auth-migrations:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/catalog-service:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/catalog-migrations:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/inventory-service:$IMAGE_TAG"
+          docker push "$IMAGE_PREFIX/inventory-migrations:$IMAGE_TAG"
           docker push "$IMAGE_PREFIX/gateway:$IMAGE_TAG"
           echo "Published release: $IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
 

@@ -48,6 +48,7 @@ IMAGE_PREFIX=$image_prefix
 DB_USER=homestock
 AUTH_DB_NAME=homestock_auth
 CATALOG_DB_NAME=homestock_catalog
+INVENTORY_DB_NAME=homestock_inventory
 CATALOG_SERVICE_PORT=9090
 DB_PASSWORD=$db_password
 JWT_SECRET=$jwt_secret

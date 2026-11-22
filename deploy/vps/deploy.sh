@@ -23,7 +23,7 @@ compose=(docker compose --project-name "${HOMESTOCK_PROJECT:-homestock-vps}" --e
 diagnostics() {
   echo "Deployment failed. Inspect the logs before retrying; no database rollback was performed." >&2
   "${compose[@]}" ps -a || true
-  "${compose[@]}" logs --tail=60 postgres auth-service catalog-service gateway || true
+  "${compose[@]}" logs --tail=60 postgres auth-service catalog-service inventory-service gateway || true
 }
 trap diagnostics ERR
 
@@ -32,7 +32,8 @@ postgres_container=$("${compose[@]}" ps --all --quiet postgres)
 if [[ ${HOMESTOCK_SKIP_PULL:-0} != 1 ]]; then
   if [[ -n "$postgres_container" ]]; then
     # An application release does not upgrade the existing database image.
-    "${compose[@]}" --profile tools pull auth-service auth-migrations catalog-service catalog-migrations gateway
+    "${compose[@]}" --profile tools pull \
+      auth-service auth-migrations catalog-service catalog-migrations inventory-service inventory-migrations gateway
   else
     "${compose[@]}" --profile tools pull
   fi
@@ -48,6 +49,7 @@ mkdir -p "$deployment_home/backups"
 backup_timestamp=$(date -u +%Y%m%dT%H%M%S)
 auth_backup_file="$deployment_home/backups/auth-$backup_timestamp-$IMAGE_TAG.sql.gz"
 catalog_backup_file="$deployment_home/backups/catalog-$backup_timestamp-$IMAGE_TAG.sql.gz"
+inventory_backup_file="$deployment_home/backups/inventory-$backup_timestamp-$IMAGE_TAG.sql.gz"
 
 # shellcheck disable=SC2016
 "${compose[@]}" exec -T postgres sh -c \
@@ -62,11 +64,17 @@ POSTGRES_IMAGE="$postgres_image" "${compose[@]}" up -d --no-build --pull never -
     echo "CATALOG_DB_NAME must differ from AUTH_DB_NAME." >&2
     exit 1
   fi
-  exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v catalog_db="$CATALOG_DB_NAME"
+  if [ "$INVENTORY_DB_NAME" = "$POSTGRES_DB" ] || [ "$INVENTORY_DB_NAME" = "$CATALOG_DB_NAME" ]; then
+    echo "INVENTORY_DB_NAME must differ from AUTH_DB_NAME and CATALOG_DB_NAME." >&2
+    exit 1
+  fi
+  exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -v catalog_db="$CATALOG_DB_NAME" -v inventory_db="$INVENTORY_DB_NAME"
 ' <<'SQL'
-SELECT format('CREATE DATABASE %I', :'catalog_db')
+SELECT format('CREATE DATABASE %I', db.database_name)
+FROM (VALUES (:'catalog_db'), (:'inventory_db')) AS db(database_name)
 WHERE NOT EXISTS (
-    SELECT 1 FROM pg_database WHERE datname = :'catalog_db'
+    SELECT 1 FROM pg_database WHERE datname = db.database_name
 ) \gexec
 SQL
 
@@ -75,13 +83,20 @@ SQL
   'exec pg_dump -U "$POSTGRES_USER" -d "$CATALOG_DB_NAME"' | gzip > "$catalog_backup_file.tmp"
 mv -- "$catalog_backup_file.tmp" "$catalog_backup_file"
 
+# shellcheck disable=SC2016
+"${compose[@]}" exec -T postgres sh -c \
+  'exec pg_dump -U "$POSTGRES_USER" -d "$INVENTORY_DB_NAME"' | gzip > "$inventory_backup_file.tmp"
+mv -- "$inventory_backup_file.tmp" "$inventory_backup_file"
+
 "${compose[@]}" run --rm --no-deps auth-migrations up
 "${compose[@]}" run --rm --no-deps catalog-migrations up
+"${compose[@]}" run --rm --no-deps inventory-migrations up
 "${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 auth-service
 "${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 catalog-service
+"${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 inventory-service
 "${compose[@]}" up -d --no-build --no-deps --force-recreate --wait --wait-timeout 120 gateway
 
 printf '%s\n' "$IMAGE_TAG" > "$release_dir/IMAGE_TAG"
 ln -sfn -- "$release_dir" "$deployment_home/current"
 trap - ERR
-echo "Deployed $IMAGE_TAG. Database backups: $auth_backup_file $catalog_backup_file"
+echo "Deployed $IMAGE_TAG. Database backups: $auth_backup_file $catalog_backup_file $inventory_backup_file"

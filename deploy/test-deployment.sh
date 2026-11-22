@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
   echo "Usage: bash deploy/test-deployment.sh IMAGE_PREFIX sha-<commit>" >&2
-  echo "Build auth, catalog, both migrations and gateway images locally before running this check." >&2
+  echo "Build auth, catalog, inventory, their migration images, and the gateway before running this check." >&2
   exit 1
 fi
 
@@ -86,6 +86,7 @@ services:
   postgres:
     environment:
       CATALOG_DB_NAME: ""
+      INVENTORY_DB_NAME: ""
 YAML
 "${compose[@]}" -f "$legacy_postgres_override" up -d --no-build --pull never --wait --wait-timeout 120 postgres
 
@@ -145,6 +146,8 @@ docker tag "$IMAGE_PREFIX/auth-service:$IMAGE_TAG" "$IMAGE_PREFIX/auth-service:$
 docker tag "$IMAGE_PREFIX/auth-migrations:$IMAGE_TAG" "$IMAGE_PREFIX/auth-migrations:$updated_tag"
 docker tag "$IMAGE_PREFIX/catalog-service:$IMAGE_TAG" "$IMAGE_PREFIX/catalog-service:$updated_tag"
 docker tag "$IMAGE_PREFIX/catalog-migrations:$IMAGE_TAG" "$IMAGE_PREFIX/catalog-migrations:$updated_tag"
+docker tag "$IMAGE_PREFIX/inventory-service:$IMAGE_TAG" "$IMAGE_PREFIX/inventory-service:$updated_tag"
+docker tag "$IMAGE_PREFIX/inventory-migrations:$IMAGE_TAG" "$IMAGE_PREFIX/inventory-migrations:$updated_tag"
 docker tag "$IMAGE_PREFIX/gateway:$IMAGE_TAG" "$IMAGE_PREFIX/gateway:$updated_tag"
 bash "$script_dir/vps/deploy.sh" "$updated_tag"
 export IMAGE_TAG=$updated_tag
