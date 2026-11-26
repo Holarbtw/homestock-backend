@@ -141,6 +141,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       INVENTORY_DB_NAME: ${INVENTORY_DB_NAME:-homestock_inventory}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      CATALOG_SERVICE_PORT: ${CATALOG_SERVICE_PORT:-9090}
     depends_on:
       postgres:
         condition: service_healthy
