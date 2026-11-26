@@ -9,10 +9,14 @@ import (
 
 type Config struct {
 	Port string `env:"INVENTORY_SERVICE_PORT" env-default:"8080"`
+	CatalogServicePort string `env:"CATALOG_SERVICE_PORT" env-default:"9090"`
 	DB   DBConfig
 	JWT  JWTConfig
 }
 
+func (c *Config) CatalogGRPCAddr() string{
+	return "catalog-service:" + c.CatalogServicePort
+}
 type JWTConfig struct {
 	Secret string `env:"JWT_SECRET" env-required:"true"`
 }

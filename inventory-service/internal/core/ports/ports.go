@@ -66,3 +66,11 @@ type ItemService interface {
 	UpdateItem(ctx context.Context, userID uuid.UUID, input *UpdateItemInput) (*domain.ItemStock, error)
 	DeleteItem(ctx context.Context, userID, itemID uuid.UUID) error
 }
+
+type CatalogLookup interface{
+	FindByGTIN(ctx context.Context, gtin string) (*domain.CatalogProduct, error)
+}
+
+type CatalogSearchService interface{
+	FindByGTIN(ctx context.Context, gtin string) (*domain.CatalogProduct, error)
+}

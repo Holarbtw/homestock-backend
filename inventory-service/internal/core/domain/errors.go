@@ -105,4 +105,20 @@ var (
 		StatusCode: http.StatusConflict,
 		Msg:        "Idempotency key was already used for a different request",
 	}
+	ErrCatalogItemNotFound = &apperrors.CustomError{
+		Code:       "CATALOG_ITEM_NOT_FOUND",
+		StatusCode: http.StatusNotFound,
+		Msg:        "Catalog item not found",
+	}
+	ErrCatalogUnavailable = &apperrors.CustomError{
+		Code: "CATALOG_SERVICE_UNAVAILABLE",
+		StatusCode: http.StatusServiceUnavailable,
+		Msg: "Catalog service is unavailable",
+	}
+	ErrCatalogTimeout = &apperrors.CustomError{
+		Code: "CATALOG_SERVICE_TIMEOUT",
+		StatusCode: http.StatusGatewayTimeout,
+		Msg: "Catalog lookup timed out",
+	}
 )
+

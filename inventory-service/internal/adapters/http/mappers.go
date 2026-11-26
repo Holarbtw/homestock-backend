@@ -11,6 +11,18 @@ import (
 	pkgQuantity "github.com/Holarbtw/homestock-backend/pkg/quantity"
 )
 
+func toCatalogProductResponse(product *domain.CatalogProduct) CatalogProductResponse {
+	return CatalogProductResponse{
+		CatalogProductID: product.ID,
+		GTIN:             product.GTIN,
+		Name:             product.Name,
+		Brand:            product.Brand,
+		Unit:             string(product.Unit),
+		PackageQuantity:  optionalQuantityString(product.PackageQuantity),
+		ExternalImageURL: optionalURLString(product.ImageURL),
+	}
+}
+
 func toItemDetailsResponse(stock *domain.ItemStock, batches []domain.Batch) *ItemDetailsResponse {
 	return &ItemDetailsResponse{
 		Item:    toItemResponse(stock),
@@ -28,11 +40,6 @@ func toCreateItemResponse(stock *domain.ItemStock, batches []domain.Batch, opera
 
 func toItemResponse(stock *domain.ItemStock) ItemResponse {
 	item := stock.Item
-	var imageURL *string
-	if item.ExternalImageURL != nil {
-		value := item.ExternalImageURL.String()
-		imageURL = &value
-	}
 	return ItemResponse{
 		ID:               item.ID,
 		SpaceID:          item.SpaceID,
@@ -44,7 +51,7 @@ func toItemResponse(stock *domain.ItemStock) ItemResponse {
 		Unit:             string(item.Unit),
 		MinimumQuantity:  optionalQuantityString(item.MinimumQuantity),
 		PackageQuantity:  optionalQuantityString(item.PackageQuantity),
-		ImageURL:         imageURL,
+		ImageURL:         optionalURLString(item.ExternalImageURL),
 		TotalQuantity:    stock.TotalQuantity.String(),
 		IsLowStock:       stock.IsLowStock(),
 		CreatedAt:        item.CreatedAt.UTC(),
@@ -96,6 +103,14 @@ func toStockOperationResponse(operation *domain.StockOperation) *StockOperationR
 }
 
 func optionalQuantityString(value *pkgQuantity.Quantity) *string {
+	if value == nil {
+		return nil
+	}
+	text := value.String()
+	return &text
+}
+
+func optionalURLString(value *url.URL) *string {
 	if value == nil {
 		return nil
 	}
