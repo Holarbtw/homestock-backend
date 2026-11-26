@@ -23,6 +23,16 @@ type PaginationMeta struct {
 	NextOffset *int `json:"next_offset" extensions:"x-nullable"`
 }
 
+type CatalogProductResponse struct {
+	CatalogProductID uuid.UUID `json:"catalog_product_id" format:"uuid" validate:"required"`
+	GTIN             string    `json:"gtin" validate:"required" example:"04600634855338"`
+	Name             string    `json:"name" validate:"required" example:"Молоко 930 мл"`
+	Brand            *string   `json:"brand,omitempty" example:"Простоквашино"`
+	Unit             string    `json:"unit,omitempty" enums:"ml,g,pcs" example:"ml"`
+	PackageQuantity  *string   `json:"package_quantity,omitempty" example:"930.000"`
+	ExternalImageURL *string   `json:"external_image_url,omitempty" format:"uri"`
+}
+
 type CreateItemRequest struct {
 	Name             string           `json:"name" validate:"required" example:"Молоко 930 мл"`
 	Brand            *string          `json:"brand,omitempty" example:"Простоквашино"`

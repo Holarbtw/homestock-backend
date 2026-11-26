@@ -13,13 +13,17 @@ import (
 
 	_ "github.com/Holarbtw/homestock-backend/inventory-service/docs"
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/adapters/db/postgres"
+	grpcAdapter "github.com/Holarbtw/homestock-backend/inventory-service/internal/adapters/grpc"
 	httpAdapter "github.com/Holarbtw/homestock-backend/inventory-service/internal/adapters/http"
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/config"
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/services"
 	pkgJWT "github.com/Holarbtw/homestock-backend/pkg/jwt"
 	"github.com/Holarbtw/homestock-backend/pkg/logger"
+	catalogv1 "github.com/Holarbtw/homestock-backend/pkg/pb/catalog/v1"
 	pkgPostgres "github.com/Holarbtw/homestock-backend/pkg/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // @title Homestock Inventory Service API
@@ -70,6 +74,16 @@ func run() error {
 	}
 	slog.Info("connected to postgres", "db", cfg.DB.Name)
 
+	catalogConn, err := grpc.NewClient(cfg.CatalogGRPCAddr(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("create catalog gRPC client: %w", err)
+	}
+	defer catalogConn.Close()
+
+	catalogClient := grpcAdapter.NewCatalogClient(catalogv1.NewCatalogServiceClient(catalogConn))
+	catalogSearchService := services.NewCatalogSearchService(catalogClient)
+	catalogHandler := httpAdapter.NewCatalogSearchHandler(catalogSearchService)
+
 	itemService := services.NewItemService(
 		pkgPostgres.NewTxManager(pool),
 		postgres.NewItemRepository(pool),
@@ -80,7 +94,7 @@ func run() error {
 	)
 	jwtVerifier := pkgJWT.NewTokenVerifier(cfg.JWT.Secret)
 	itemHandler := httpAdapter.NewItemHandler(itemService)
-	router := httpAdapter.NewRouter(itemHandler, jwtVerifier)
+	router := httpAdapter.NewRouter(itemHandler, jwtVerifier, catalogHandler)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

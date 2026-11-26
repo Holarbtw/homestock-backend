@@ -97,3 +97,16 @@ type ItemStock struct {
 func (s *ItemStock) IsLowStock() bool {
 	return s.Item.IsLowStock(s.TotalQuantity)
 }
+
+type CatalogProduct struct{
+	ID uuid.UUID
+	GTIN string
+	Name string
+	Brand *string
+	Category *string
+	Unit Unit
+	PackageQuantity  *quantity.Quantity
+	ImageURL *url.URL
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+}
