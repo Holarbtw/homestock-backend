@@ -11,7 +11,12 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func NewRouter(itemHandler *ItemHandler, jwtVerifier *pkgJWT.TokenVerifier, catalogSearchHandler *CatalogSearchHandler) http.Handler{
+func NewRouter(
+	itemHandler *ItemHandler,
+	jwtVerifier *pkgJWT.TokenVerifier,
+	catalogSearchHandler *CatalogSearchHandler,
+	stockHandler *StockHandler,
+) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -33,6 +38,7 @@ func NewRouter(itemHandler *ItemHandler, jwtVerifier *pkgJWT.TokenVerifier, cata
 		r.Get("/items/{item_id}", itemHandler.GetItem)
 		r.Patch("/items/{item_id}", itemHandler.UpdateItem)
 		r.Delete("/items/{item_id}", itemHandler.DeleteItem)
+		r.Post("/items/{item_id}/batches", stockHandler.Replenish)
 		r.Get("/catalog/product/{gtin}", catalogSearchHandler.FindByGTIN)
 	})
 

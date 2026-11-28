@@ -84,17 +84,19 @@ func run() error {
 	catalogSearchService := services.NewCatalogSearchService(catalogClient)
 	catalogHandler := httpAdapter.NewCatalogSearchHandler(catalogSearchService)
 
-	itemService := services.NewItemService(
-		pkgPostgres.NewTxManager(pool),
-		postgres.NewItemRepository(pool),
-		postgres.NewSpaceRepository(pool),
-		postgres.NewBatchRepository(pool),
-		postgres.NewIdempotencyRepository(pool),
-		postgres.NewStockOperationRepository(pool),
-	)
+	txManager := pkgPostgres.NewTxManager(pool)
+	itemRepo := postgres.NewItemRepository(pool)
+	spaceRepo := postgres.NewSpaceRepository(pool)
+	batchRepo := postgres.NewBatchRepository(pool)
+	idempotencyRepo := postgres.NewIdempotencyRepository(pool)
+	stockRepo := postgres.NewStockOperationRepository(pool)
+
+	itemService := services.NewItemService(txManager, itemRepo, spaceRepo, batchRepo, idempotencyRepo, stockRepo)
+	stockService := services.NewStockService(txManager, itemRepo, spaceRepo, batchRepo, idempotencyRepo, stockRepo)
 	jwtVerifier := pkgJWT.NewTokenVerifier(cfg.JWT.Secret)
 	itemHandler := httpAdapter.NewItemHandler(itemService)
-	router := httpAdapter.NewRouter(itemHandler, jwtVerifier, catalogHandler)
+	stockHandler := httpAdapter.NewStockHandler(stockService)
+	router := httpAdapter.NewRouter(itemHandler, jwtVerifier, catalogHandler, stockHandler)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

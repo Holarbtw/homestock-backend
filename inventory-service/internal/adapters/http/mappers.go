@@ -31,7 +31,19 @@ func toItemDetailsResponse(stock *domain.ItemStock, batches []domain.Batch) *Ite
 }
 
 func toCreateItemResponse(stock *domain.ItemStock, batches []domain.Batch, operation *domain.StockOperation) *CreateItemResponse {
-	return &CreateItemResponse{
+	response := &CreateItemResponse{
+		Item:    toItemResponse(stock),
+		Batches: toBatchResponses(batches),
+	}
+	if operation != nil {
+		operationResponse := toStockOperationResponse(*operation)
+		response.Operation = &operationResponse
+	}
+	return response
+}
+
+func toStockChangeResponse(stock *domain.ItemStock, batches []domain.Batch, operation domain.StockOperation) StockChangeResponse {
+	return StockChangeResponse{
 		Item:      toItemResponse(stock),
 		Batches:   toBatchResponses(batches),
 		Operation: toStockOperationResponse(operation),
@@ -79,10 +91,7 @@ func toBatchResponse(batch domain.Batch) BatchResponse {
 	}
 }
 
-func toStockOperationResponse(operation *domain.StockOperation) *StockOperationResponse {
-	if operation == nil {
-		return nil
-	}
+func toStockOperationResponse(operation domain.StockOperation) StockOperationResponse {
 	lines := make([]StockOperationLineResponse, len(operation.Lines))
 	for i, line := range operation.Lines {
 		lines[i] = StockOperationLineResponse{
@@ -90,7 +99,7 @@ func toStockOperationResponse(operation *domain.StockOperation) *StockOperationR
 			Quantity: line.Quantity.String(),
 		}
 	}
-	return &StockOperationResponse{
+	return StockOperationResponse{
 		ID:          operation.ID,
 		SpaceID:     operation.SpaceID,
 		ItemID:      operation.ItemID,
@@ -126,43 +135,30 @@ func optionalDateString(value *domain.Date) *string {
 	return &text
 }
 
-func toCreateItemInput(req CreateItemRequest) (*ports.CreateItemInput, error) {
-	minimum, minimumErr := parseOptionalValue(req.MinimumQuantity, pkgQuantity.ParseQuantity)
-	packageQuantity, packageErr := parseOptionalValue(req.PackageQuantity, pkgQuantity.ParseQuantity)
-	imageURL, imageErr := parseOptionalValue(req.ExternalImageURL, url.Parse)
-	if imageErr != nil {
-		imageErr = domain.ErrInvalidExternalImageURL.WithInternal(imageErr)
-	}
+type fieldCheck struct {
+	field string
+	err   error
+}
 
-	type fieldCheck struct {
-		field string
-		err   error
-	}
-	checks := []fieldCheck{
-		{"minimum_quantity", minimumErr},
-		{"package_quantity", packageErr},
-		{"external_image_url", imageErr},
-	}
-
-	var firstBatch *ports.InitialBatchInput
-	if req.FirstBatch != nil {
-		amount, amountErr := pkgQuantity.ParseQuantity(req.FirstBatch.Quantity)
-		purchasedOn, purchaseErr := parseOptionalValue(req.FirstBatch.PurchasedOn, domain.ParseDate)
-		expiresOn, expiryErr := parseOptionalValue(req.FirstBatch.ExpiresOn, domain.ParseDate)
-		checks = append(checks,
-			fieldCheck{"first_batch.quantity", amountErr},
-			fieldCheck{"first_batch.purchased_on", purchaseErr},
-			fieldCheck{"first_batch.expires_on", expiryErr},
-		)
-		if amountErr == nil && purchaseErr == nil && expiryErr == nil {
-			firstBatch = &ports.InitialBatchInput{
-				Quantity:    *amount,
-				PurchasedOn: purchasedOn,
-				ExpiresOn:   expiresOn,
-			}
+func parseBatchRequest(req AddBatchRequest, fieldPrefix string) (*ports.InitialBatchInput, []fieldCheck) {
+	amount, amountErr := pkgQuantity.ParseQuantity(req.Quantity)
+	purchasedOn, purchaseErr := parseOptionalValue(req.PurchasedOn, domain.ParseDate)
+	expiresOn, expiryErr := parseOptionalValue(req.ExpiresOn, domain.ParseDate)
+	if amountErr != nil || purchaseErr != nil || expiryErr != nil {
+		return nil, []fieldCheck{
+			{fieldPrefix + "quantity", amountErr},
+			{fieldPrefix + "purchased_on", purchaseErr},
+			{fieldPrefix + "expires_on", expiryErr},
 		}
 	}
+	return &ports.InitialBatchInput{
+		Quantity:    *amount,
+		PurchasedOn: purchasedOn,
+		ExpiresOn:   expiresOn,
+	}, nil
+}
 
+func collectFieldErrors(checks []fieldCheck) ([]apperrors.FieldError, error) {
 	var fields []apperrors.FieldError
 	for _, check := range checks {
 		if check.err == nil {
@@ -173,6 +169,50 @@ func toCreateItemInput(req CreateItemRequest) (*ports.CreateItemInput, error) {
 			return nil, check.err
 		}
 		fields = append(fields, apperrors.FieldError{Field: check.field, Code: fieldErr.Code})
+	}
+	return fields, nil
+}
+
+func toAddBatchInput(req AddBatchRequest) (*ports.AddBatchInput, error) {
+	batch, checks := parseBatchRequest(req, "")
+	fields, err := collectFieldErrors(checks)
+	if err != nil {
+		return nil, err
+	}
+	if len(fields) > 0 {
+		return nil, domain.ErrInvalidAddBatch.WithFields(fields)
+	}
+	return &ports.AddBatchInput{
+		Quantity:    batch.Quantity,
+		PurchasedOn: batch.PurchasedOn,
+		ExpiresOn:   batch.ExpiresOn,
+	}, nil
+}
+
+func toCreateItemInput(req CreateItemRequest) (*ports.CreateItemInput, error) {
+	minimum, minimumErr := parseOptionalValue(req.MinimumQuantity, pkgQuantity.ParseQuantity)
+	packageQuantity, packageErr := parseOptionalValue(req.PackageQuantity, pkgQuantity.ParseQuantity)
+	imageURL, imageErr := parseOptionalValue(req.ExternalImageURL, url.Parse)
+	if imageErr != nil {
+		imageErr = domain.ErrInvalidExternalImageURL.WithInternal(imageErr)
+	}
+
+	checks := []fieldCheck{
+		{"minimum_quantity", minimumErr},
+		{"package_quantity", packageErr},
+		{"external_image_url", imageErr},
+	}
+
+	var firstBatch *ports.InitialBatchInput
+	if req.FirstBatch != nil {
+		var batchChecks []fieldCheck
+		firstBatch, batchChecks = parseBatchRequest(*req.FirstBatch, "first_batch.")
+		checks = append(checks, batchChecks...)
+	}
+
+	fields, err := collectFieldErrors(checks)
+	if err != nil {
+		return nil, err
 	}
 	if len(fields) > 0 {
 		return nil, domain.ErrInvalidItemCreate.WithFields(fields)
