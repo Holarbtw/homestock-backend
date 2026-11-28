@@ -173,34 +173,22 @@ func (s *ItemService) CreateItem(
 			return err
 		}
 
-		reserved, err := s.idempotencyRepo.TryReserve(txCtx, space.ID, idempotencyKey, string(fingerprint.Command), fingerprint.Hash)
+		result, err := reserveOrLoadResult(s.idempotencyRepo, txCtx, space.ID, idempotencyKey, fingerprint)
 		if err != nil {
 			return err
 		}
 
-		if !reserved {
-			record, err := s.idempotencyRepo.GetByKey(txCtx, space.ID, idempotencyKey)
+		if result != nil{
+			decodedItem, decodedBatches, decodedStockOperation, err := decodeItemResult(result.Data)
 			if err != nil {
 				return err
 			}
 
-			if record.Result == nil {
-				return apperrors.ErrInternalServer
-			}
+			stock = decodedItem
+			batches = decodedBatches
+			operation = decodedStockOperation
 
-			if record.RequestHash == fingerprint.Hash && record.CommandType == string(fingerprint.Command) {
-				decodedItem, decodedBatches, decodedStockOperation, err := decodeCreateItemResult(record.Result.Data)
-				if err != nil {
-					return err
-				}
-				stock = decodedItem
-				batches = decodedBatches
-				operation = decodedStockOperation
-
-				return nil
-			}
-
-			return domain.ErrIdempotencyKeyConflict
+			return nil
 		}
 
 		item, err := s.itemRepo.Create(txCtx, domain.InventoryItem{
@@ -245,7 +233,7 @@ func (s *ItemService) CreateItem(
 			stock.TotalQuantity = batch.RemainingQuantity
 		}
 
-		data, err := encodeCreateItemResult(stock, batches, operation)
+		data, err := encodeItemResult(stock, batches, operation)
 		if err != nil {
 			return err
 		}

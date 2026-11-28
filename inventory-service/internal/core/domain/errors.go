@@ -120,5 +120,10 @@ var (
 		StatusCode: http.StatusGatewayTimeout,
 		Msg: "Catalog lookup timed out",
 	}
+	ErrInvalidAddBatch = &apperrors.CustomError{
+		Code:       "INVALID_ADD_BATCH",
+		StatusCode: http.StatusBadRequest,
+		Msg:        "Invalid batch creation data",
+	}
 )
 

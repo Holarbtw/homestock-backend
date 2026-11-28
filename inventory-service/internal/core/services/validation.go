@@ -3,9 +3,11 @@ package services
 import (
 	"errors"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/domain"
+	"github.com/Holarbtw/homestock-backend/inventory-service/internal/core/ports"
 	"github.com/Holarbtw/homestock-backend/pkg/apperrors"
 )
 
@@ -47,6 +49,22 @@ func validateItemBrand(brand string) (string, error) {
 	}
 
 	return trimmed, nil
+}
+
+func validateAddBatchInput(input *ports.AddBatchInput) error{
+	if input == nil{
+		return apperrors.ErrInvalidRequest
+	}
+	if input.Quantity.Thousandths() == 0{
+		return domain.ErrInvalidBatchQuantity
+	}
+
+	err := validatePurchaseDate(input.PurchasedOn, time.Now())
+	if err != nil {
+		return err
+	}
+
+	return validateOptionalDate(input.ExpiresOn)
 }
 
 func appendFieldError(

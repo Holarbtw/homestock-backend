@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type storedCreateItemResult struct {
+type storedItemResult struct {
 	Item      storedItemStock       `json:"item"`
 	Batches   []storedBatch         `json:"batches"`
 	Operation *storedStockOperation `json:"operation,omitempty"`
@@ -67,11 +67,11 @@ type storedStockOperationLine struct {
 	Quantity    string    `json:"quantity"`
 }
 
-func encodeCreateItemResult(stock *domain.ItemStock, batches []domain.Batch, operation *domain.StockOperation) ([]byte, error) {
+func encodeItemResult(stock *domain.ItemStock, batches []domain.Batch, operation *domain.StockOperation) ([]byte, error) {
 	if stock == nil || stock.Item.ID == uuid.Nil {
 		return nil, apperrors.ErrInternalServer.WithInternal(errors.New("create item result is missing the created item"))
 	}
-	result := storedCreateItemResult{
+	result := storedItemResult{
 		Item:      snapshotItemStock(stock),
 		Batches:   make([]storedBatch, 0, len(batches)),
 		Operation: snapshotStockOperation(operation),
@@ -94,8 +94,8 @@ func encodeCreateItemResult(stock *domain.ItemStock, batches []domain.Batch, ope
 	return data, nil
 }
 
-func decodeCreateItemResult(data []byte) (*domain.ItemStock, []domain.Batch, *domain.StockOperation, error) {
-	var result storedCreateItemResult
+func decodeItemResult(data []byte) (*domain.ItemStock, []domain.Batch, *domain.StockOperation, error) {
+	var result storedItemResult
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, nil, nil, apperrors.ErrInternalServer.WithInternal(fmt.Errorf("decode create item result: %w", err))
 	}

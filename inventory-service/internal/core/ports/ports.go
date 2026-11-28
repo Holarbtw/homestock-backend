@@ -74,3 +74,7 @@ type CatalogLookup interface{
 type CatalogSearchService interface{
 	FindByGTIN(ctx context.Context, gtin string) (*domain.CatalogProduct, error)
 }
+
+type StockService interface{
+	Replenish(ctx context.Context, idempotencyKey string, input *AddBatchInput, userID uuid.UUID) (stock *domain.ItemStock, batches []domain.Batch, operation *domain.StockOperation, err error)
+}
