@@ -17,6 +17,7 @@ Open `/api/v1/inventory/swagger/index.html` through the gateway. The VPS gateway
 | `GET /items/{item_id}` | Item UUID in the path | `200` with `data.item` and `data.batches` |
 | `PATCH /items/{item_id}` | Item UUID and a JSON object with any of `name`, `brand`, `category`, `minimum_quantity` | `200` with the updated item in `data` |
 | `DELETE /items/{item_id}` | Item UUID in the path | `204` with no body |
+| `POST /items/{item_id}/batches` | Item UUID in the path, an `Idempotency-Key` header and a JSON object with `quantity` and optional dates | `201` with the updated `data.item`, one new batch in `data.batches` and the `REPLENISH` operation in `data.operation` |
 | `GET /catalog/product/{gtin}` | GTIN in the path as 8, 12, 13 or 14 digits | `200` with the catalog product in `data` |
 
 Deleting an item removes it from active inventory, even if stock remains. Its batches and operation history are preserved. Getting, editing or deleting that item again returns `404`.
@@ -32,7 +33,7 @@ Use the catalog lookup to prefill the create form. Its response includes `catalo
 - `name` and `brand` are trimmed. A provided string must be nonblank and contain no NUL characters. The limits are 200 Unicode code points for the name and 100 for the brand.
 - `category` accepts `FOOD`, `MEDICINE` or `HOUSEHOLD`. `unit` accepts `ml`, `g` or `pcs`. The card's unit also applies to its batches and operations.
 - Send quantities as nonnegative decimal strings with at most three fractional digits, for example `"930.000"`. `package_quantity` represents the size of one package. It must be positive when provided. `minimum_quantity` is an optional low-stock threshold and can be zero.
-- `first_batch` is optional. When provided, it needs a positive `quantity`. Its `purchased_on` and `expires_on` dates are optional. The purchase date cannot be later than the current calendar date on the server. The expiry date can be in the past or the future.
+- An item's `first_batch` and a replenishment request use the same batch fields. Provide a positive `quantity` in the item's unit. Both `purchased_on` and `expires_on` are optional. The purchase date must be today or earlier on the server. The expiry date can be in the past or the future.
 - An optional `gtin` accepts 8, 12, 13 or 14 digits and is returned as 14 digits with leading zeroes if needed. An optional `catalog_product_id` must be a nonzero UUID. An optional `external_image_url` must be an absolute HTTP or HTTPS URL with a hostname.
 
 In PATCH, a missing field keeps its current value. `null` clears `brand` or `minimum_quantity`. If `name` or `category` is included, it must contain a valid string. The following request clears the brand and sets an explicit zero threshold.
@@ -48,11 +49,11 @@ In PATCH, a missing field keeps its current value. `null` clears `brand` or `min
 
 `purchased_on` and `expires_on` are calendar dates in `YYYY-MM-DD` with years from 0001 to 9999. Keep them as dates when displaying them. Server timestamps such as `created_at`, `updated_at`, `added_at` and `occurred_at` use RFC 3339 UTC and end in `Z`. Fractional seconds may be present. The client can convert these timestamps to local time for display.
 
-### Idempotent creation
+### Idempotent creation and replenishment
 
-Generate one `Idempotency-Key` for each new create action. A UUID string works. The key must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL characters. After a timeout or a lost response, retry the same request with the same key.
+Generate one `Idempotency-Key` for each item creation or replenishment. A UUID string works. The key must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL characters. After a timeout or a lost response, retry the same request with the same key.
 
-The key is scoped to the user's personal space. A successful replay returns `201` with the result saved by the original request, including the original item ID. Reusing the key with different valid input returns `409 IDEMPOTENCY_KEY_CONFLICT`.
+The key is scoped to the user's personal space. A successful replay returns `201` with the result saved by the original request, including the original IDs. Reusing the key for a different action or with different valid input returns `409 IDEMPOTENCY_KEY_CONFLICT`.
 
 ### Pagination
 
@@ -111,14 +112,16 @@ The following error comes from a PATCH request with an invalid name and category
 | 400 | `INVALID_GTIN` | The lookup GTIN has an invalid length or contains non-digit characters |
 | 400 | `INVALID_ITEM_CREATE` | Creation input failed validation. Check `fields` for details such as `INVALID_IDEMPOTENCY_KEY`, `INVALID_DATE` or `INVALID_BATCH_QUANTITY` |
 | 400 | `INVALID_ITEM_UPDATE` | One or more editable fields failed validation. Check `fields` |
-| 400 | `INVALID_QUANTITY_FORMAT`, `QUANTITY_PRECISION_EXCEEDED`, `QUANTITY_OUT_OF_RANGE` | A quantity could not be parsed. On create these codes can appear within `fields` |
+| 400 | `INVALID_ADD_BATCH` | A replenishment quantity or date could not be parsed. Check `fields` for `quantity`, `purchased_on` or `expires_on` |
+| 400 | `INVALID_BATCH_QUANTITY`, `PURCHASE_DATE_IN_FUTURE`, `INVALID_IDEMPOTENCY_KEY` | The replenishment requires a positive batch quantity, a purchase date of today or earlier if supplied, and a valid idempotency key |
+| 400 | `INVALID_QUANTITY_FORMAT`, `QUANTITY_PRECISION_EXCEEDED`, `QUANTITY_OUT_OF_RANGE` | A quantity could not be parsed. On creation and replenishment these codes can appear within `fields` |
 | 401 | `UNAUTHORIZED` | The Bearer header is missing or malformed |
 | 401 | `INVALID_TOKEN` | The access token is invalid or expired |
 | 404 | `ITEM_NOT_FOUND` | The item is absent, deleted or outside the user's space |
-| 404 | `SPACE_NOT_FOUND` | The user has no personal space for the requested get, update or delete operation |
+| 404 | `SPACE_NOT_FOUND` | The user has no personal space for the requested get, update, delete or replenishment operation |
 | 404 | `CATALOG_ITEM_NOT_FOUND` | The catalog has no product with this GTIN |
 | 409 | `IDEMPOTENCY_KEY_CONFLICT` | The key was already used for a different request |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` | The create or update request must use `Content-Type: application/json` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | The create, update or replenishment request must use `Content-Type: application/json` |
 | 500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |
 | 503 | `CATALOG_SERVICE_UNAVAILABLE` | The catalog lookup could not be completed because the service is unavailable |
 | 504 | `CATALOG_SERVICE_TIMEOUT` | The catalog lookup exceeded its deadline |

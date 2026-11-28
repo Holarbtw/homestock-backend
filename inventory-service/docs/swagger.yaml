@@ -192,6 +192,11 @@ definitions:
       data:
         $ref: '#/definitions/http.ItemResponse'
     type: object
+  http.DataResponse-http_StockChangeResponse:
+    properties:
+      data:
+        $ref: '#/definitions/http.StockChangeResponse'
+    type: object
   http.ItemDetailsResponse:
     properties:
       batches:
@@ -290,6 +295,21 @@ definitions:
       offset:
         type: integer
     type: object
+  http.StockChangeResponse:
+    properties:
+      batches:
+        items:
+          $ref: '#/definitions/http.BatchResponse'
+        type: array
+      item:
+        $ref: '#/definitions/http.ItemResponse'
+      operation:
+        $ref: '#/definitions/http.StockOperationResponse'
+    required:
+    - batches
+    - item
+    - operation
+    type: object
   http.StockOperationLineResponse:
     properties:
       batch_id:
@@ -386,61 +406,66 @@ info:
     and `data.batches` |\r\n| `PATCH /items/{item_id}` | Item UUID and a JSON object
     with any of `name`, `brand`, `category`, `minimum_quantity` | `200` with the updated
     item in `data` |\r\n| `DELETE /items/{item_id}` | Item UUID in the path | `204`
-    with no body |\r\n| `GET /catalog/product/{gtin}` | GTIN in the path as 8, 12,
-    13 or 14 digits | `200` with the catalog product in `data` |\r\n\r\nDeleting an
-    item removes it from active inventory, even if stock remains. Its batches and
-    operation history are preserved. Getting, editing or deleting that item again
-    returns `404`.\r\n\r\nAn item response always includes `id`, `space_id`, `name`,
-    `category`, `unit`, `total_quantity`, `is_low_stock`, `created_at` and `updated_at`.
-    Optional fields such as `brand`, `minimum_quantity` and `image_url` are omitted
-    when unset. The total is the sum of the remaining quantities across all batches,
-    including expired batches. `is_low_stock` is true when a threshold is set and
-    the total is at or below it.\r\n\r\nWhen present, `batches` contains full batch
-    objects, including any with zero remaining quantity. Empty arrays appear as `[]`.
-    Create returns the first replenishment in `operation` only when the request included
-    a first batch. Each operation line identifies the batch and the amount added to
-    it.\r\n\r\nUse the catalog lookup to prefill the create form. Its response includes
-    `catalog_product_id`, `gtin` padded to 14 digits and `name`. It also includes
-    `brand`, `unit`, `package_quantity` and `external_image_url` when available. Choose
-    the inventory category when creating the item.\r\n\r\n### Input rules\r\n\r\n-
-    `name` and `brand` are trimmed. A provided string must be nonblank and contain
-    no NUL characters. The limits are 200 Unicode code points for the name and 100
-    for the brand.\r\n- `category` accepts `FOOD`, `MEDICINE` or `HOUSEHOLD`. `unit`
-    accepts `ml`, `g` or `pcs`. The card's unit also applies to its batches and operations.\r\n-
-    Send quantities as nonnegative decimal strings with at most three fractional digits,
-    for example `\"930.000\"`. `package_quantity` represents the size of one package.
-    It must be positive when provided. `minimum_quantity` is an optional low-stock
-    threshold and can be zero.\r\n- `first_batch` is optional. When provided, it needs
-    a positive `quantity`. Its `purchased_on` and `expires_on` dates are optional.
-    The purchase date cannot be later than the current calendar date on the server.
-    The expiry date can be in the past or the future.\r\n- An optional `gtin` accepts
-    8, 12, 13 or 14 digits and is returned as 14 digits with leading zeroes if needed.
-    An optional `catalog_product_id` must be a nonzero UUID. An optional `external_image_url`
-    must be an absolute HTTP or HTTPS URL with a hostname.\r\n\r\nIn PATCH, a missing
-    field keeps its current value. `null` clears `brand` or `minimum_quantity`. If
-    `name` or `category` is included, it must contain a valid string. The following
-    request clears the brand and sets an explicit zero threshold.\r\n\r\n```json\r\n{\r\n
-    \ \"brand\": null,\r\n  \"minimum_quantity\": \"0\"\r\n}\r\n```\r\n\r\n### Dates
-    and timestamps\r\n\r\n`purchased_on` and `expires_on` are calendar dates in `YYYY-MM-DD`
-    with years from 0001 to 9999. Keep them as dates when displaying them. Server
-    timestamps such as `created_at`, `updated_at`, `added_at` and `occurred_at` use
-    RFC 3339 UTC and end in `Z`. Fractional seconds may be present. The client can
-    convert these timestamps to local time for display.\r\n\r\n### Idempotent creation\r\n\r\nGenerate
-    one `Idempotency-Key` for each new create action. A UUID string works. The key
-    must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL characters.
-    After a timeout or a lost response, retry the same request with the same key.\r\n\r\nThe
-    key is scoped to the user's personal space. A successful replay returns `201`
-    with the result saved by the original request, including the original item ID.
-    Reusing the key with different valid input returns `409 IDEMPOTENCY_KEY_CONFLICT`.\r\n\r\n###
-    Pagination\r\n\r\n`limit` defaults to `20` and must be a positive integer. Values
-    above `100` are capped at `100`. `offset` defaults to `0` and must be a nonnegative
-    integer. An empty or invalid query value returns `400`. Items are sorted by `created_at`
-    descending, then by `id` descending.\r\n\r\n`meta.limit` and `meta.offset` show
-    the values the server applied. Use `meta.next_offset` in the next request when
-    `meta.has_more` is true. On the last page, `has_more` is false and `next_offset`
-    is `null`. The list response does not include the total number of cards.\r\n\r\nThe
-    following response represents an empty page.\r\n\r\n```json\r\n{\r\n  \"data\":
-    [],\r\n  \"meta\": {\r\n    \"limit\": 20,\r\n    \"offset\": 0,\r\n    \"has_more\":
+    with no body |\r\n| `POST /items/{item_id}/batches` | Item UUID in the path, an
+    `Idempotency-Key` header and a JSON object with `quantity` and optional dates
+    | `201` with the updated `data.item`, one new batch in `data.batches` and the
+    `REPLENISH` operation in `data.operation` |\r\n| `GET /catalog/product/{gtin}`
+    | GTIN in the path as 8, 12, 13 or 14 digits | `200` with the catalog product
+    in `data` |\r\n\r\nDeleting an item removes it from active inventory, even if
+    stock remains. Its batches and operation history are preserved. Getting, editing
+    or deleting that item again returns `404`.\r\n\r\nAn item response always includes
+    `id`, `space_id`, `name`, `category`, `unit`, `total_quantity`, `is_low_stock`,
+    `created_at` and `updated_at`. Optional fields such as `brand`, `minimum_quantity`
+    and `image_url` are omitted when unset. The total is the sum of the remaining
+    quantities across all batches, including expired batches. `is_low_stock` is true
+    when a threshold is set and the total is at or below it.\r\n\r\nWhen present,
+    `batches` contains full batch objects, including any with zero remaining quantity.
+    Empty arrays appear as `[]`. Create returns the first replenishment in `operation`
+    only when the request included a first batch. Each operation line identifies the
+    batch and the amount added to it.\r\n\r\nUse the catalog lookup to prefill the
+    create form. Its response includes `catalog_product_id`, `gtin` padded to 14 digits
+    and `name`. It also includes `brand`, `unit`, `package_quantity` and `external_image_url`
+    when available. Choose the inventory category when creating the item.\r\n\r\n###
+    Input rules\r\n\r\n- `name` and `brand` are trimmed. A provided string must be
+    nonblank and contain no NUL characters. The limits are 200 Unicode code points
+    for the name and 100 for the brand.\r\n- `category` accepts `FOOD`, `MEDICINE`
+    or `HOUSEHOLD`. `unit` accepts `ml`, `g` or `pcs`. The card's unit also applies
+    to its batches and operations.\r\n- Send quantities as nonnegative decimal strings
+    with at most three fractional digits, for example `\"930.000\"`. `package_quantity`
+    represents the size of one package. It must be positive when provided. `minimum_quantity`
+    is an optional low-stock threshold and can be zero.\r\n- An item's `first_batch`
+    and a replenishment request use the same batch fields. Provide a positive `quantity`
+    in the item's unit. Both `purchased_on` and `expires_on` are optional. The purchase
+    date must be today or earlier on the server. The expiry date can be in the past
+    or the future.\r\n- An optional `gtin` accepts 8, 12, 13 or 14 digits and is returned
+    as 14 digits with leading zeroes if needed. An optional `catalog_product_id` must
+    be a nonzero UUID. An optional `external_image_url` must be an absolute HTTP or
+    HTTPS URL with a hostname.\r\n\r\nIn PATCH, a missing field keeps its current
+    value. `null` clears `brand` or `minimum_quantity`. If `name` or `category` is
+    included, it must contain a valid string. The following request clears the brand
+    and sets an explicit zero threshold.\r\n\r\n```json\r\n{\r\n  \"brand\": null,\r\n
+    \ \"minimum_quantity\": \"0\"\r\n}\r\n```\r\n\r\n### Dates and timestamps\r\n\r\n`purchased_on`
+    and `expires_on` are calendar dates in `YYYY-MM-DD` with years from 0001 to 9999.
+    Keep them as dates when displaying them. Server timestamps such as `created_at`,
+    `updated_at`, `added_at` and `occurred_at` use RFC 3339 UTC and end in `Z`. Fractional
+    seconds may be present. The client can convert these timestamps to local time
+    for display.\r\n\r\n### Idempotent creation and replenishment\r\n\r\nGenerate
+    one `Idempotency-Key` for each item creation or replenishment. A UUID string works.
+    The key must be nonblank UTF-8 text of at most 200 bytes and must contain no NUL
+    characters. After a timeout or a lost response, retry the same request with the
+    same key.\r\n\r\nThe key is scoped to the user's personal space. A successful
+    replay returns `201` with the result saved by the original request, including
+    the original IDs. Reusing the key for a different action or with different valid
+    input returns `409 IDEMPOTENCY_KEY_CONFLICT`.\r\n\r\n### Pagination\r\n\r\n`limit`
+    defaults to `20` and must be a positive integer. Values above `100` are capped
+    at `100`. `offset` defaults to `0` and must be a nonnegative integer. An empty
+    or invalid query value returns `400`. Items are sorted by `created_at` descending,
+    then by `id` descending.\r\n\r\n`meta.limit` and `meta.offset` show the values
+    the server applied. Use `meta.next_offset` in the next request when `meta.has_more`
+    is true. On the last page, `has_more` is false and `next_offset` is `null`. The
+    list response does not include the total number of cards.\r\n\r\nThe following
+    response represents an empty page.\r\n\r\n```json\r\n{\r\n  \"data\": [],\r\n
+    \ \"meta\": {\r\n    \"limit\": 20,\r\n    \"offset\": 0,\r\n    \"has_more\":
     false,\r\n    \"next_offset\": null\r\n  }\r\n}\r\n```\r\n\r\n### Gateway rate
     limits (VPS)\r\n\r\nThe VPS Caddy gateway applies two independent limits per client
     IP over a sliding five-second window.\r\n\r\n| Operations | Requests per five
@@ -467,17 +492,22 @@ info:
     400 | `INVALID_ITEM_CREATE` | Creation input failed validation. Check `fields`
     for details such as `INVALID_IDEMPOTENCY_KEY`, `INVALID_DATE` or `INVALID_BATCH_QUANTITY`
     |\r\n| 400 | `INVALID_ITEM_UPDATE` | One or more editable fields failed validation.
-    Check `fields` |\r\n| 400 | `INVALID_QUANTITY_FORMAT`, `QUANTITY_PRECISION_EXCEEDED`,
-    `QUANTITY_OUT_OF_RANGE` | A quantity could not be parsed. On create these codes
-    can appear within `fields` |\r\n| 401 | `UNAUTHORIZED` | The Bearer header is
-    missing or malformed |\r\n| 401 | `INVALID_TOKEN` | The access token is invalid
-    or expired |\r\n| 404 | `ITEM_NOT_FOUND` | The item is absent, deleted or outside
-    the user's space |\r\n| 404 | `SPACE_NOT_FOUND` | The user has no personal space
-    for the requested get, update or delete operation |\r\n| 404 | `CATALOG_ITEM_NOT_FOUND`
-    | The catalog has no product with this GTIN |\r\n| 409 | `IDEMPOTENCY_KEY_CONFLICT`
-    | The key was already used for a different request |\r\n| 415 | `UNSUPPORTED_MEDIA_TYPE`
-    | The create or update request must use `Content-Type: application/json` |\r\n|
-    500 | `INTERNAL_SERVER_ERROR` | An internal operation failed |\r\n| 503 | `CATALOG_SERVICE_UNAVAILABLE`
+    Check `fields` |\r\n| 400 | `INVALID_ADD_BATCH` | A replenishment quantity or
+    date could not be parsed. Check `fields` for `quantity`, `purchased_on` or `expires_on`
+    |\r\n| 400 | `INVALID_BATCH_QUANTITY`, `PURCHASE_DATE_IN_FUTURE`, `INVALID_IDEMPOTENCY_KEY`
+    | The replenishment requires a positive batch quantity, a purchase date of today
+    or earlier if supplied, and a valid idempotency key |\r\n| 400 | `INVALID_QUANTITY_FORMAT`,
+    `QUANTITY_PRECISION_EXCEEDED`, `QUANTITY_OUT_OF_RANGE` | A quantity could not
+    be parsed. On creation and replenishment these codes can appear within `fields`
+    |\r\n| 401 | `UNAUTHORIZED` | The Bearer header is missing or malformed |\r\n|
+    401 | `INVALID_TOKEN` | The access token is invalid or expired |\r\n| 404 | `ITEM_NOT_FOUND`
+    | The item is absent, deleted or outside the user's space |\r\n| 404 | `SPACE_NOT_FOUND`
+    | The user has no personal space for the requested get, update, delete or replenishment
+    operation |\r\n| 404 | `CATALOG_ITEM_NOT_FOUND` | The catalog has no product with
+    this GTIN |\r\n| 409 | `IDEMPOTENCY_KEY_CONFLICT` | The key was already used for
+    a different request |\r\n| 415 | `UNSUPPORTED_MEDIA_TYPE` | The create, update
+    or replenishment request must use `Content-Type: application/json` |\r\n| 500
+    | `INTERNAL_SERVER_ERROR` | An internal operation failed |\r\n| 503 | `CATALOG_SERVICE_UNAVAILABLE`
     | The catalog lookup could not be completed because the service is unavailable
     |\r\n| 504 | `CATALOG_SERVICE_TIMEOUT` | The catalog lookup exceeded its deadline
     |\r\n\r\nErrors generated by the router or gateway can use another format. Clients
@@ -752,6 +782,69 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update an inventory item
+      tags:
+      - Items
+  /items/{item_id}/batches:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Adds a batch to an active item and returns the updated item, the new batch and its REPLENISH operation.
+        Send a positive quantity as a decimal string with up to three fractional digits. The optional purchased_on and expires_on fields use YYYY-MM-DD. The purchase date must be today or earlier.
+        Retry the same request with the same Idempotency-Key to receive the saved result with status 201. Reusing the key for a different request returns 409.
+      parameters:
+      - description: Item UUID
+        format: uuid
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: Client-generated request key, up to 200 bytes
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Batch data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/http.AddBatchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.DataResponse-http_StockChangeResponse'
+        "400":
+          description: INVALID_REQUEST, INVALID_ADD_BATCH, INVALID_BATCH_QUANTITY,
+            PURCHASE_DATE_IN_FUTURE, INVALID_IDEMPOTENCY_KEY
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "401":
+          description: UNAUTHORIZED, INVALID_TOKEN
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "404":
+          description: ITEM_NOT_FOUND, SPACE_NOT_FOUND
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "409":
+          description: IDEMPOTENCY_KEY_CONFLICT
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "415":
+          description: UNSUPPORTED_MEDIA_TYPE
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+        "500":
+          description: INTERNAL_SERVER_ERROR
+          schema:
+            $ref: '#/definitions/apperrors.CustomError'
+      security:
+      - ApiKeyAuth: []
+      summary: Replenish an inventory item
       tags:
       - Items
 securityDefinitions:
